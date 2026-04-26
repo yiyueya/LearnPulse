@@ -1,6 +1,6 @@
 # 学习历史记录服务
 import json
-import os
+from pathlib import Path
 from datetime import datetime
 from config.config import DATA_DIR
 
@@ -8,9 +8,9 @@ class LearningHistoryManager:
     """学习历史管理"""
 
     def __init__(self):
-        self.history_file = os.path.join(DATA_DIR, "learning_history.json")
-        os.makedirs(DATA_DIR, exist_ok=True)
-        if not os.path.exists(self.history_file):
+        self.history_file = DATA_DIR / "learning_history.json"
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        if not self.history_file.exists():
             self._save([])
 
     def _load(self):

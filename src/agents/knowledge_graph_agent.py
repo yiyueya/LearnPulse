@@ -1,23 +1,23 @@
 # 知识图谱Agent
 from src.services.knowledge_graph import KnowledgeGraph
-import os
 import json
+from pathlib import Path
 from config.config import JSON_DIR
 
 class KnowledgeGraphAgent:
     """知识图谱Agent，负责构建和维护知识地图"""
-    
+
     def __init__(self):
         self.knowledge_graph = KnowledgeGraph()
         self.json_dir = JSON_DIR
-    
+
     def build_knowledge_map(self, subject):
         """构建指定学科的知识地图"""
         # 加载该学科的所有知识点JSON文件
         subject_files = []
-        for file in os.listdir(self.json_dir):
-            if subject in file and file.endswith(".json"):
-                subject_files.append(os.path.join(self.json_dir, file))
+        for file in self.json_dir.iterdir():
+            if subject in file.name and file.suffix == ".json":
+                subject_files.append(file)
         
         if not subject_files:
             return {"status": "error", "message": f"未找到{subject}学科的知识点文件"}

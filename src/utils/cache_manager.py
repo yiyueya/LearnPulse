@@ -1,9 +1,9 @@
 # 缓存管理工具
-import os
 import json
 import hashlib
 import time
 import threading
+from pathlib import Path
 from config.config import JSON_DIR, CACHE_EXPIRY_DAYS, MAX_CACHE_SIZE_MB
 
 # 缓存条目上限（超过则按时间淘汰最旧的）
@@ -20,15 +20,15 @@ class CacheManager:
     """
 
     def __init__(self):
-        self.cache_dir = os.path.join(JSON_DIR, "cache")
-        self.image_cache_file = os.path.join(self.cache_dir, "image_cache.json")
-        self.process_cache_file = os.path.join(self.cache_dir, "process_cache.json")
-        self.process_status_file = os.path.join(self.cache_dir, "process_status.json")
+        self.cache_dir = JSON_DIR / "cache"
+        self.image_cache_file = self.cache_dir / "image_cache.json"
+        self.process_cache_file = self.cache_dir / "process_cache.json"
+        self.process_status_file = self.cache_dir / "process_status.json"
         self._lock = threading.Lock()
         self._image_dirty = False
         self._process_dirty = False
         self._status_dirty = False
-        os.makedirs(self.cache_dir, exist_ok=True)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.image_cache = self._load_cache(self.image_cache_file)
         self.process_cache = self._load_cache(self.process_cache_file)
@@ -38,7 +38,7 @@ class CacheManager:
         self._enforce_limits()
 
     def _load_cache(self, cache_file):
-        if os.path.exists(cache_file):
+        if cache_file.exists():
             try:
                 with open(cache_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)

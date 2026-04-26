@@ -1,10 +1,10 @@
 # AI服务模块
 import requests
 import base64
-import os
 import hashlib
 import json
 import concurrent.futures
+from pathlib import Path
 from functools import lru_cache
 from config.config import MINIMAX_API_KEY, MINIMAX_API_URL, MAX_MERGED_SIZE_MB, CACHE_DIR, MAX_IMAGE_BATCH_WORKERS
 from src.utils.logger import logger
@@ -16,8 +16,8 @@ class AIService:
         self.api_key = MINIMAX_API_KEY
         self.api_url = MINIMAX_API_URL
         # 初始化缓存目录
-        self.cache_dir = CACHE_DIR or os.path.join(os.path.dirname(__file__), '..', '..', 'temp', 'cache')
-        os.makedirs(self.cache_dir, exist_ok=True)
+        self.cache_dir = CACHE_DIR or Path(__file__).parent.parent.parent / 'temp' / 'cache'
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
         # 内存缓存
         self.image_cache = {}
         self.batch_cache = {}
@@ -33,7 +33,7 @@ class AIService:
         """生成批量处理的缓存键"""
         # 对图片路径排序，确保顺序不影响缓存键
         sorted_paths = sorted(image_paths)
-        paths_str = '_'.join([os.path.basename(p) for p in sorted_paths])
+        paths_str = '_'.join([Path(p).name for p in sorted_paths])
         paths_hash = hashlib.md5(paths_str.encode()).hexdigest()
         prompt_hash = hashlib.md5(prompt.encode()).hexdigest()
         return f"batch_{paths_hash}_{prompt_hash}"
@@ -43,10 +43,10 @@ class AIService:
         # 先检查内存缓存
         if cache_key in self.image_cache:
             return self.image_cache[cache_key]
-        
+
         # 再检查文件缓存
-        cache_file = os.path.join(self.cache_dir, f"{cache_key}.json")
-        if os.path.exists(cache_file):
+        cache_file = self.cache_dir / f"{cache_key}.json"
+        if cache_file.exists():
             try:
                 with open(cache_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
@@ -62,9 +62,9 @@ class AIService:
         """保存数据到缓存"""
         # 存入内存缓存
         self.image_cache[cache_key] = data
-        
+
         # 存入文件缓存
-        cache_file = os.path.join(self.cache_dir, f"{cache_key}.json")
+        cache_file = self.cache_dir / f"{cache_key}.json"
         try:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
@@ -72,9 +72,39 @@ class AIService:
             print(f"保存缓存失败: {e}")
 
     def extract_knowledge(self, text, max_retries=3):
-        """从文本中提取知识点"""
-        retries = 0
-        while retries < max_retries:
+        """从文本中提取知识点
+
+        Args:
+            text: 输入文本
+            max_retries: 最大重试次数
+
+        Returns:
+            str: JSON格式的知识点字符串，失败返回空字符串
+        """
+        # JSON schema示例
+        json_schema_example = """{
+    "knowledge_points": [
+        {
+            "name": "知识点名称",
+            "subject": "数学或语文",
+            "grade": "年级",
+            "content": "知识点详细描述"
+        }
+    ]
+}"""
+
+        system_prompt = f"""你是一个教育专家，擅长从教材中提取知识点。
+
+【关键要求】你必须且只能返回JSON格式的数据，不要包含任何其他文字、解释或 markdown 代码块标记。
+
+返回格式必须符合以下JSON Schema：
+{json_schema_example}
+
+如果返回的内容不是纯JSON格式，将被视为失败。"""
+
+        user_prompt = f"从以下文本中提取小学数学/语文的知识点:\n{text}"
+
+        for attempt in range(max_retries):
             try:
                 url = f"{self.api_url}/chat/completions"
                 headers = {
@@ -82,17 +112,17 @@ class AIService:
                     "Content-Type": "application/json"
                 }
 
+                # 根据重试次数调整提示词严格程度
+                if attempt > 0:
+                    strict_prompt = system_prompt + "\n\n【警告】上次返回的不是有效JSON，请务必只返回纯JSON数据，不要添加任何其他内容。"
+                else:
+                    strict_prompt = system_prompt
+
                 payload = {
                     "model": "MiniMax-M2.7",
                     "messages": [
-                        {
-                            "role": "system",
-                            "content": "你是一个教育专家，擅长从教材中提取知识点。请从文本中提取小学数学/语文的知识点，返回结构化的JSON格式。"
-                        },
-                        {
-                            "role": "user",
-                            "content": f"从以下文本中提取小学数学/语文的知识点，返回结构化的JSON格式:\n{text}"
-                        }
+                        {"role": "system", "content": strict_prompt},
+                        {"role": "user", "content": user_prompt}
                     ]
                 }
 
@@ -100,29 +130,39 @@ class AIService:
 
                 if response.status_code == 200:
                     result = response.json()
-                    return result["choices"][0]["message"]["content"]
+                    raw_content = result["choices"][0]["message"]["content"]
+
+                    # 验证是否为有效JSON
+                    try:
+                        # 尝试解析JSON
+                        json.loads(raw_content)
+                        # 如果解析成功，直接返回
+                        return raw_content
+                    except json.JSONDecodeError:
+                        logger.warning(f"第 {attempt + 1} 次尝试：AI返回的不是有效JSON")
+                        if attempt < max_retries - 1:
+                            logger.info(f"重试中... ({attempt + 1}/{max_retries})")
+                        else:
+                            logger.error(f"提取知识点失败，已尝试 {max_retries} 次，所有尝试均未返回有效JSON")
+                            return ""
                 else:
                     logger.error(f"AI API调用失败: {response.status_code}, {response.text}")
-                    retries += 1
-                    if retries < max_retries:
-                        # 对于 529 错误（服务器拥挤）使用指数退避
-                        wait_time = 2 ** retries  # 指数退避：2, 4, 8 秒
-                        if response.status_code == 529:
-                            wait_time = wait_time * 2  # 服务器拥挤时等待时间翻倍
-                        logger.info(f"重试中... ({retries}/{max_retries})，等待 {wait_time} 秒")
+                    if response.status_code == 529:
+                        wait_time = (2 ** (attempt + 1)) * 2
+                    else:
+                        wait_time = 2 ** (attempt + 1)
+                    if attempt < max_retries - 1:
+                        logger.info(f"等待 {wait_time} 秒后重试...")
                         import time
                         time.sleep(wait_time)
             except Exception as e:
                 logger.error(f"AI提取知识点错误: {e}")
-                retries += 1
-                if retries < max_retries:
-                    # 对于异常也使用指数退避
-                    wait_time = 2 ** retries
-                    logger.info(f"重试中... ({retries}/{max_retries})，等待 {wait_time} 秒")
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** (attempt + 1)
+                    logger.info(f"等待 {wait_time} 秒后重试...")
                     import time
                     time.sleep(wait_time)
-        
-        # 重试失败
+
         logger.error(f"提取知识点失败，已尝试 {max_retries} 次")
         return ""
 
@@ -140,17 +180,17 @@ class AIService:
         """
         # 开始计时
         if image_path:
-            timer_key = f"understand_image_{os.path.basename(image_path)}"
+            timer_key = f"understand_image_{Path(image_path).name}"
         else:
             timer_key = "understand_image_url"
         logger.start_timer(timer_key)
-        
+
         # 检查缓存（仅支持本地图片路径）
         if image_path:
             cache_key = self._get_cache_key(image_path, prompt)
             cached_result = self._load_from_cache(cache_key)
             if cached_result:
-                logger.info(f"从缓存加载结果: {os.path.basename(image_path)}")
+                logger.info(f"从缓存加载结果: {Path(image_path).name}")
                 logger.stop_timer(timer_key)
                 logger.log_performance(timer_key, "图片理解（缓存）")
                 return cached_result
@@ -335,7 +375,7 @@ class AIService:
         for img_path in image_paths:
             try:
                 # 估算合并后的大小（实际合并后会更小，这里用原始大小估算）
-                img_size = os.path.getsize(img_path)
+                img_size = Path(img_path).stat().st_size
                 
                 # 预留 30% 空间用于压缩
                 estimated_size = img_size * 0.7
@@ -364,7 +404,7 @@ class AIService:
         print(f"\n基于大小分组：{len(image_paths)} 张图片 → {len(batches)} 个批次")
         for i, batch in enumerate(batches):
             try:
-                batch_size = sum(os.path.getsize(p) for p in batch) / 1024 / 1024
+                batch_size = sum(Path(p).stat().st_size for p in batch) / 1024 / 1024
                 print(f"  批次 {i+1}: {len(batch)} 张图片, 估算大小: {batch_size:.2f}MB")
             except:
                 pass
@@ -441,8 +481,9 @@ class AIService:
             # 检查是否会超过 PIL 的限制
             if total_height > 100000 or max_width > 50000:
                 cb(f"尺寸过大({max_width}x{total_height})，回退到逐张处理")
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
+                temp_path_obj = Path(temp_path)
+                if temp_path_obj.exists():
+                    temp_path_obj.unlink()
                 return self._process_image_batch_fallback(group_images, prompt, progress_callback)
 
             # 创建合并图片
@@ -468,7 +509,7 @@ class AIService:
             # 保存临时文件
             temp_path = group_images[0] + '_combined.jpg'
             combined.save(temp_path, quality=85, optimize=True)
-            file_size_mb = os.path.getsize(temp_path) / 1024 / 1024
+            file_size_mb = Path(temp_path).stat().st_size / 1024 / 1024
             cb(f"合并完成, 文件大小: {file_size_mb:.2f}MB")
 
             if file_size_mb < MAX_MERGED_SIZE_MB:
@@ -501,17 +542,20 @@ class AIService:
                         cb("解析成功，分配结果")
                     else:
                         cb("批量解析失败，回退到逐张识别")
-                        if os.path.exists(temp_path):
-                            os.remove(temp_path)
+                        temp_path_obj = Path(temp_path)
+                        if temp_path_obj.exists():
+                            temp_path_obj.unlink()
                         return self._process_image_batch_fallback(group_images, prompt, progress_callback)
             else:
                 cb(f"文件过大({file_size_mb:.2f}MB>{MAX_MERGED_SIZE_MB}MB)，逐张处理")
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
+                temp_path_obj = Path(temp_path)
+                if temp_path_obj.exists():
+                    temp_path_obj.unlink()
                 return self._process_image_batch_fallback(group_images, prompt, progress_callback)
 
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+            temp_path_obj = Path(temp_path)
+            if temp_path_obj.exists():
+                temp_path_obj.unlink()
 
         except Exception as e:
             cb(f"处理异常: {e}，回退到逐张处理")

@@ -1,21 +1,21 @@
 # 文件状态管理工具
-import os
 import json
 import hashlib
+from pathlib import Path
 from config.config import DATA_DIR, JSON_DIR
 from src.utils.logger import logger
 
 class FileStatusManager:
     """文件状态管理，用于记录PDF文档的读取状态"""
-    
+
     def __init__(self):
-        self.status_file = os.path.join(JSON_DIR, "file_status.json")
-        os.makedirs(JSON_DIR, exist_ok=True)
+        self.status_file = JSON_DIR / "file_status.json"
+        JSON_DIR.mkdir(parents=True, exist_ok=True)
         self.status_data = self._load_status()
-    
+
     def _load_status(self):
         """加载文件状态"""
-        if os.path.exists(self.status_file):
+        if self.status_file.exists():
             try:
                 with open(self.status_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
@@ -63,38 +63,37 @@ class FileStatusManager:
     def get_modified_files(self, subject):
         """获取指定学科的修改文件列表"""
         try:
-            subject_dir = os.path.join(DATA_DIR, subject)
-            if not os.path.exists(subject_dir):
+            subject_dir = DATA_DIR / subject
+            if not subject_dir.exists():
                 return []
-            
+
             modified_files = []
-            for file in os.listdir(subject_dir):
-                if file.endswith(".pdf"):
-                    file_path = os.path.join(subject_dir, file)
-                    if self.is_file_modified(file_path):
-                        modified_files.append(file_path)
+            for file in subject_dir.iterdir():
+                if file.suffix == ".pdf":
+                    if self.is_file_modified(str(file)):
+                        modified_files.append(str(file))
             return modified_files
         except Exception as e:
             logger.error(f"获取修改文件列表错误: {e}")
             return []
-    
+
     def get_all_modified_files(self):
         """获取所有学科的修改文件列表"""
         try:
             subjects = ["数学", "语文"]
             all_modified_files = []
-            
+
             for subject in subjects:
                 subject_files = self.get_modified_files(subject)
                 for file_path in subject_files:
-                    filename = os.path.basename(file_path)
+                    filename = Path(file_path).name
                     all_modified_files.append({
                         "path": file_path,
                         "filename": filename,
                         "subject": subject,
                         "grade": "一年级" if "一年级" in filename else "二年级"
                     })
-            
+
             return all_modified_files
         except Exception as e:
             logger.error(f"获取所有修改文件错误: {e}")

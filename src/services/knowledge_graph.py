@@ -1,16 +1,16 @@
 # 知识图谱服务
 import networkx as nx
 import json
-import os
+from pathlib import Path
 from config.config import KNOWLEDGE_MAP_DIR
 
 class KnowledgeGraph:
     """知识图谱管理"""
-    
+
     def __init__(self):
         self.graph = nx.DiGraph()
         self.knowledge_map_dir = KNOWLEDGE_MAP_DIR
-        os.makedirs(self.knowledge_map_dir, exist_ok=True)
+        self.knowledge_map_dir.mkdir(parents=True, exist_ok=True)
     
     def add_knowledge_point(self, node_id, name, subject, grade, content=""):
         """添加知识点"""
@@ -40,14 +40,14 @@ class KnowledgeGraph:
             ]
         }
         
-        filepath = os.path.join(self.knowledge_map_dir, filename)
+        filepath = self.knowledge_map_dir / filename
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     def load_graph(self, filename):
         """加载知识图谱"""
-        filepath = os.path.join(self.knowledge_map_dir, filename)
-        if not os.path.exists(filepath):
+        filepath = self.knowledge_map_dir / filename
+        if not filepath.exists():
             return
         
         with open(filepath, 'r', encoding='utf-8') as f:

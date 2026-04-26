@@ -1,19 +1,19 @@
 # 日志和性能监控模块
 import logging
 import time
-import os
+from pathlib import Path
 from datetime import datetime
 
 class Logger:
     """日志和性能监控类"""
-    
+
     def __init__(self):
         # 创建日志目录
-        log_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'logs')
-        os.makedirs(log_dir, exist_ok=True)
-        
+        log_dir = Path(__file__).parent.parent.parent / 'logs'
+        log_dir.mkdir(parents=True, exist_ok=True)
+
         # 配置日志
-        log_file = os.path.join(log_dir, f"app_{datetime.now().strftime('%Y-%m-%d')}.log")
+        log_file = log_dir / f"app_{datetime.now().strftime('%Y-%m-%d')}.log"
         
         # 设置日志格式 - 更清晰的时间显示
         formatter = logging.Formatter(

@@ -5,8 +5,8 @@ from src.services.ai_service import AIService
 from src.utils.text_splitter import TextSplitter
 from src.utils.cache_manager import CacheManager
 from src.utils.logger import logger
-import os
 import json
+from pathlib import Path
 from config.config import JSON_DIR, IMAGE_PROCESSING_ENABLED, MAX_IMAGES_PER_PDF
 
 class ContentExtractorAgent:
@@ -19,7 +19,7 @@ class ContentExtractorAgent:
         self.text_splitter = TextSplitter()
         self.cache_manager = CacheManager()
         self.json_dir = JSON_DIR
-        os.makedirs(self.json_dir, exist_ok=True)
+        self.json_dir.mkdir(parents=True, exist_ok=True)
         self.progress_callback = None
         self._cancel_check = None
         self._cancelled = False
@@ -58,7 +58,7 @@ class ContentExtractorAgent:
     
     def process_pdf(self, pdf_path, subject, grade):
         """处理PDF文档，提取知识点（包括图片内容）"""
-        filename = os.path.basename(pdf_path)
+        filename = Path(pdf_path).name
 
         self._check_cancel()
 
@@ -181,8 +181,8 @@ class ContentExtractorAgent:
                 knowledge_data = json.loads(knowledge_json)
             except json.JSONDecodeError:
                 self._update_progress(f"处理完成 (非JSON): {filename}")
-                json_filename = os.path.basename(pdf_path).replace(".pdf", ".json")
-                filepath = os.path.join(self.json_dir, f"{subject}_{grade}_{json_filename}")
+                json_filename = Path(pdf_path).name.replace(".pdf", ".json")
+                filepath = self.json_dir / f"{subject}_{grade}_{json_filename}"
                 with open(filepath, 'w', encoding='utf-8') as f:
                     f.write(knowledge_json)
                 self.file_status_manager.update_file_status(pdf_path)
@@ -207,8 +207,8 @@ class ContentExtractorAgent:
                 return result_data
 
         self._update_progress(f"保存知识点: {filename}")
-        json_filename = os.path.basename(pdf_path).replace(".pdf", ".json")
-        filepath = os.path.join(self.json_dir, f"{subject}_{grade}_{json_filename}")
+        json_filename = Path(pdf_path).name.replace(".pdf", ".json")
+        filepath = self.json_dir / f"{subject}_{grade}_{json_filename}"
 
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
@@ -263,7 +263,7 @@ class ContentExtractorAgent:
 
         for pdf_file in modified_files:
             self._check_cancel()
-            filename = os.path.basename(pdf_file)
+            filename = Path(pdf_file).name
             subject = "数学" if "数学" in pdf_file else "语文"
             grade = "一年级" if "一年级" in filename else "二年级"
 
@@ -324,11 +324,11 @@ class ContentExtractorAgent:
             if self.cache_manager.is_file_completed(pdf_path):
                 result = self.cache_manager.get_process_result(pdf_path)
                 if result:
-                    filename = os.path.basename(pdf_path)
+                    filename = Path(pdf_path).name
                     self._update_progress(f"文件已处理完成，使用缓存结果: {filename}")
                     if subject not in results:
                         results[subject] = {}
-                    results[subject][os.path.basename(pdf_path)] = result
+                    results[subject][Path(pdf_path).name] = result
                     skipped_files += 1
                     processed_files += 1
                     progress = (processed_files / total_files) * 100 if total_files > 0 else 100
@@ -339,7 +339,7 @@ class ContentExtractorAgent:
             self._check_cancel()
             if subject not in results:
                 results[subject] = {}
-            results[subject][os.path.basename(pdf_path)] = result
+            results[subject][Path(pdf_path).name] = result
 
             processed_files += 1
             progress = (processed_files / total_files) * 100 if total_files > 0 else 100

@@ -1,31 +1,31 @@
 # PDF 解析工具
-import os
 import fitz  # PyMuPDF
 import pdfplumber
 import concurrent.futures
+from pathlib import Path
 from config.config import DATA_DIR, IMAGE_PROCESSING_ENABLED, MIN_IMAGE_SIZE
 from src.utils.cache_manager import CacheManager
 from src.utils.logger import logger
 
 class PDFParser:
     """PDF解析工具，用于提取文本和图片"""
-    
+
     def __init__(self):
         self.data_dir = DATA_DIR
         self.cache_manager = CacheManager()
-    
+
     def get_pdf_files(self, subject):
         """获取指定学科的PDF文件列表"""
         try:
-            subject_dir = os.path.join(self.data_dir, subject)
-            if not os.path.exists(subject_dir):
+            subject_dir = self.data_dir / subject
+            if not subject_dir.exists():
                 return []
-            
+
             pdf_files = []
-            for file in os.listdir(subject_dir):
-                if file.endswith(".pdf"):
-                    pdf_files.append(os.path.join(subject_dir, file))
-            
+            for file in subject_dir.iterdir():
+                if file.suffix == ".pdf":
+                    pdf_files.append(str(file))
+
             # 按文件名排序
             pdf_files.sort()
             return pdf_files
@@ -102,54 +102,55 @@ class PDFParser:
     def save_image_to_temp(self, img_data):
         """保存图片到临时文件"""
         try:
-            temp_dir = os.path.join(os.getcwd(), "temp")
-            os.makedirs(temp_dir, exist_ok=True)
-            
+            temp_dir = Path.cwd() / "temp"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+
             # 生成唯一的临时文件名
             temp_filename = f"temp_image_{img_data['page']}_{img_data['index']}.{img_data['ext']}"
-            temp_path = os.path.join(temp_dir, temp_filename)
-            
+            temp_path = temp_dir / temp_filename
+
             with open(temp_path, "wb") as f:
                 f.write(img_data["bytes"])
-            
-            return temp_path
+
+            return str(temp_path)
         except Exception as e:
             logger.error(f"保存临时图片错误: {e}")
             return None
-    
+
     def get_image_description(self, img_data, ai_service, prompt):
         """获取图片描述，使用缓存（单张处理）"""
         # 保存图片到临时文件
         temp_path = self.save_image_to_temp(img_data)
         if not temp_path:
             return None
-        
+
         try:
             # 检查缓存
             cached_description = self.cache_manager.get_image_cache(temp_path)
             if cached_description:
                 logger.info(f"使用缓存的图片描述 (第{img_data['page']}页)")
                 return cached_description
-            
+
             # 调用 AI 服务获取描述
             description = ai_service.understand_image(
                 image_path=temp_path,
                 prompt=prompt
             )
-            
+
             # 缓存结果
             if description:
                 self.cache_manager.set_image_cache(temp_path, description)
-            
+
             return description
         except Exception as e:
             logger.error(f"获取图片描述错误：{e}")
             return None
         finally:
             # 清理临时文件
-            if os.path.exists(temp_path):
+            temp_path_obj = Path(temp_path)
+            if temp_path_obj.exists():
                 try:
-                    os.remove(temp_path)
+                    temp_path_obj.unlink()
                 except:
                     pass
     
@@ -263,11 +264,12 @@ class PDFParser:
         finally:
             # 清理临时文件（并行）
             def cleanup_temp(temp_path):
-                if os.path.exists(temp_path):
+                temp_path_obj = Path(temp_path)
+                if temp_path_obj.exists():
                     try:
-                        os.remove(temp_path)
+                        temp_path_obj.unlink()
                     except:
                         pass
-            
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
                 executor.map(cleanup_temp, [temp_path for _, temp_path in temp_paths])

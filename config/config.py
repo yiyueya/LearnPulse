@@ -1,5 +1,6 @@
 # 配置文件
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 # 加载 .env 文件（如果存在）
@@ -11,10 +12,10 @@ MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 MINIMAX_API_URL = os.getenv("MINIMAX_API_URL", "https://api.minimaxi.com/v1")
 
 # 数据存储配置
-DATA_DIR = "data"
-JSON_DIR = "data/json"
-KNOWLEDGE_MAP_DIR = "data/knowledge_map"
-CACHE_DIR = "data/cache"  # 缓存目录
+DATA_DIR = Path("data")
+JSON_DIR = DATA_DIR / "json"
+KNOWLEDGE_MAP_DIR = DATA_DIR / "knowledge_map"
+CACHE_DIR = DATA_DIR / "cache"  # 缓存目录
 
 # PDF 解析配置
 PDF_PARSER = "pdfplumber"
