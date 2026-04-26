@@ -1,0 +1,3 @@
+2026-04-23 16:10:21 | ERROR    | AI API调用失败: 529, {"type":"error","error":{"type":"overloaded_error","message":"当前时段请求拥挤，极速版套餐可使用highspeed模型，享受更稳定的响应体验。https://platform.minimaxi.com/subscribe/token-plan (2064)","http_code":"529"},"request_id":"063906ec0b93f7c7ae8f52612e62536c"}
+
+2026-04-23 16:24:39 | ERROR    | AI提取知识点错误: HTTPSConnectionPool(host='api.minimaxi.com', port=443): Read timed out. (read timeout=120)

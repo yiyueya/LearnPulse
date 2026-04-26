@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI智能学习助手</title>
+    <!-- 引入vis.js库 -->
+    <script src="/static/libs/vis-network.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            animation: fadeIn 1s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .header h1 {
+            font-size: 2.8em;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.3em;
+            opacity: 0.9;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.6em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .card p {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
+        }
+        
+        .btn-secondary:hover {
+            box-shadow: 0 6px 20px rgba(108, 117, 125, 0.4);
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-stop:hover {
+            box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-stop:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .form-group select,
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .form-group select:focus,
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+        
+        .result {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+            border-left: 4px solid #667eea;
+        }
+        
+        .result.show {
+            display: block;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        .result h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .result pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+            padding: 30px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .loading.show {
+            display: block;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .progress-container.show {
+            display: block;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 15px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        
+        .progress-message {
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .progress-log {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .progress-log div {
+            margin-bottom: 5px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            background: #ffffff;
+            border-left: 3px solid #667eea;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        /* 知识地图样式 */
+        #knowledge-map {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-top: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .map-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        
+        .map-controls select {
+            flex: 1;
+            max-width: 200px;
+        }
+        
+        .map-info {
+            margin-top: 15px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .map-info h4 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 1.2em;
+        }
+        
+        .map-info p {
+            margin: 8px 0;
+            color: #666;
+            line-height: 1.5;
+        }
+        
+        /* 文件选择样式 */
+        .file-list {
+            margin: 20px 0;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+        
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+        
+        .file-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+            transform: translateY(-1px);
+        }
+        
+        .file-item input[type="checkbox"] {
+            margin-right: 15px;
+            transform: scale(1.3);
+            cursor: pointer;
+        }
+        
+        .file-info {
+            flex: 1;
+        }
+        
+        .file-info .filename {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .file-info .file-details {
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .no-files {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+            background: #f8f9fa;
+            border: 2px dashed #e0e0e0;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .no-files p {
+            margin: 10px 0;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .card {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .map-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .map-controls select {
+                max-width: 100%;
+            }
+        }
+        
+        /* 处理状态指示 */
+        .processing-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AI智能学习助手</h1>
+            <p>基于AI的小学生语数学习助手</p>
+        </div>
+        
+        <div class="card">
+            <h2>系统状态</h2>
+            <div id="status" class="status" style="display: none;"></div>
+            <button class="btn" onclick="checkHealth()">检查服务状态</button>
+        </div>
+        
+        <div class="card">
+            <h2>1. 选择PDF文档</h2>
+            <p>选择要处理的PDF文档，系统会提取知识点并构建知识地图</p>
+            <button class="btn btn-secondary" onclick="loadPendingFiles()">刷新文件列表</button>
+            <button class="btn" onclick="processSelectedFiles()" id="processSelectedBtn" disabled>处理选定文件</button>
+            <button class="btn" onclick="processAllFiles()">处理所有文件</button>
+            
+            <div id="fileList" class="file-list"></div>
+            
+            <div class="loading" id="fileLoading">
+                <div class="spinner"></div>
+                <p>正在加载文件列表，请稍候...</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>2. 处理进度</h2>
+            <div class="loading" id="pdfLoading">
+                <div class="spinner"></div>
+                <p>正在处理PDF文档，请稍候...</p>
+            </div>
+            <div class="progress-container" id="pdfProgress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="pdfProgressFill"></div>
+                </div>
+                <div class="progress-message" id="pdfProgressMessage">准备开始处理...</div>
+                <div class="progress-log" id="pdfProgressLog"></div>
+                <button class="btn btn-stop" id="stopProcessBtn" onclick="stopProcessing()" style="display:none; margin-top:10px;">停止处理</button>
+            </div>
+            <div class="result" id="pdfResult"></div>
+        </div>
+        
+        <div class="card">
+            <h2>3. 生成诊断测试</h2>
+            <div class="form-group">
+                <label for="subject">选择学科：</label>
+                <select id="subject">
+                    <option value="数学">数学</option>
+                    <option value="语文">语文</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="grade">选择年级：</label>
+                <select id="grade">
+                    <option value="一年级">一年级</option>
+                    <option value="二年级">二年级</option>
+                </select>
+            </div>
+            <button class="btn" onclick="generateTest()">生成测试</button>
+            <div class="loading" id="testLoading">
+                <div class="spinner"></div>
+                <p>正在生成测试题目，请稍候...</p>
+            </div>
+            <div class="result" id="testResult"></div>
+        </div>
+        
+        <div class="card">
+            <h2>4. 评估测试</h2>
+            <p>输入测试题目和学生答案进行评估</p>
+            <div class="form-group">
+                <label for="questions">测试题目（JSON格式）：</label>
+                <textarea id="questions" rows="5" placeholder='[{"question": "1+1=?", "answer": "2"}]'></textarea>
+            </div>
+            <div class="form-group">
+                <label for="answers">学生答案（JSON格式）：</label>
+                <textarea id="answers" rows="3" placeholder='["2"]'></textarea>
+            </div>
+            <button class="btn" onclick="evaluateTest()">评估测试</button>
+            <div class="loading" id="evalLoading">
+                <div class="spinner"></div>
+                <p>正在评估答案，请稍候...</p>
+            </div>
+            <div class="result" id="evalResult"></div>
+        </div>
+        
+        <div class="card">
+            <h2>5. 知识地图</h2>
+            <p>查看知识点之间的关联关系</p>
+            <div class="map-controls">
+                <select id="mapSubject">
+                    <option value="数学">数学</option>
+                    <option value="语文">语文</option>
+                </select>
+                <button class="btn" onclick="loadKnowledgeMap()">加载知识地图</button>
+            </div>
+            <div id="knowledge-map"></div>
+            <div class="map-info" id="mapInfo">
+                <h4>知识点信息</h4>
+                <p>点击知识点查看详情</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let pendingFiles = [];
+        const SELECTED_FILES_KEY = 'selected_pdf_files';
+        const PROCESSING_STATUS_KEY = 'processing_status';
+        let eventSource = null;
+        
+        function showStatus(message, isError = false) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${isError ? 'error' : 'success'}`;
+            status.style.display = 'block';
+        }
+        
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                showStatus(`服务状态: ${data.status}`);
+            } catch (error) {
+                showStatus('服务连接失败，请确保服务已启动', true);
+            }
+        }
+        
+        function saveSelectedFiles() {
+            const selectedFiles = getSelectedFiles();
+            localStorage.setItem(SELECTED_FILES_KEY, JSON.stringify(selectedFiles));
+        }
+        
+        function loadSelectedFiles() {
+            const saved = localStorage.getItem(SELECTED_FILES_KEY);
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch (e) {
+                    return [];
+                }
+            }
+            return [];
+        }
+        
+        function saveProcessingStatus(status) {
+            localStorage.setItem(PROCESSING_STATUS_KEY, JSON.stringify(status));
+        }
+        
+        function loadProcessingStatus() {
+            const saved = localStorage.getItem(PROCESSING_STATUS_KEY);
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch (e) {
+                    return null;
+                }
+            }
+            return null;
+        }
+        
+        function clearProcessingStatus() {
+            localStorage.removeItem(PROCESSING_STATUS_KEY);
+        }
+        
+        async function loadPendingFiles() {
+            const fileList = document.getElementById('fileList');
+            const fileLoading = document.getElementById('fileLoading');
+            const processSelectedBtn = document.getElementById('processSelectedBtn');
+            
+            fileLoading.classList.add('show');
+            fileList.innerHTML = '';
+            processSelectedBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE}/get_pending_files`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    pendingFiles = data.files;
+                    const savedSelectedFiles = loadSelectedFiles();
+                    const savedSelectedPaths = savedSelectedFiles.map(f => f.path);
+                    
+                    if (pendingFiles.length > 0) {
+                        pendingFiles.forEach((file, index) => {
+                            const isSelected = savedSelectedPaths.includes(file.path);
+                            const fileItem = document.createElement('div');
+                            fileItem.className = 'file-item';
+                            fileItem.innerHTML = `
+                                <input type="checkbox" id="file-${index}" value="${index}" ${isSelected ? 'checked' : ''} onchange="updateSelectButton(); saveSelectedFiles()">
+                                <div class="file-info">
+                                    <div class="filename">${file.filename}</div>
+                                    <div class="file-details">学科: ${file.subject}, 年级: ${file.grade}</div>
+                                </div>
+                            `;
+                            fileList.appendChild(fileItem);
+                        });
+                    } else {
+                        fileList.innerHTML = `
+                            <div class="no-files">
+                                <p>没有需要处理的文件</p>
+                                <p>所有PDF文件都已处理过，或data目录下没有PDF文件</p>
+                            </div>
+                        `;
+                    }
+                } else {
+                    fileList.innerHTML = `
+                        <div class="no-files">
+                            <p>加载文件失败: ${data.message}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                fileList.innerHTML = `
+                    <div class="no-files">
+                        <p>加载文件失败: ${error.message}</p>
+                    </div>
+                `;
+            } finally {
+                fileLoading.classList.remove('show');
+                updateSelectButton();
+            }
+        }
+        
+        function updateSelectButton() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+            const processSelectedBtn = document.getElementById('processSelectedBtn');
+            processSelectedBtn.disabled = checkedCount === 0;
+        }
+        
+        function getSelectedFiles() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const selectedIndices = Array.from(checkboxes)
+                .filter(cb => cb.checked)
+                .map(cb => parseInt(cb.value));
+            return selectedIndices.map(index => pendingFiles[index]);
+        }
+        
+        async function processSelectedFiles() {
+            const selectedFiles = getSelectedFiles();
+            if (selectedFiles.length === 0) {
+                showStatus('请先选择要处理的文件', true);
+                return;
+            }
+            
+            startProcessing(selectedFiles);
+        }
+        
+        async function processAllFiles() {
+            startProcessing();
+        }
+
+        async function stopProcessing() {
+            const stopBtn = document.getElementById('stopProcessBtn');
+            if (stopBtn) {
+                stopBtn.disabled = true;
+                stopBtn.textContent = '正在停止...';
+            }
+            try {
+                const response = await fetch(`${API_BASE}/cancel_process`, { method: 'POST' });
+                const data = await response.json();
+                showStatus(data.message || '已发送停止请求', false);
+            } catch (e) {
+                showStatus('停止请求失败: ' + e.message, true);
+                if (stopBtn) {
+                    stopBtn.disabled = false;
+                    stopBtn.textContent = '停止处理';
+                }
+            }
+        }
+
+        async function startProcessing(selectedFiles = null) {
+            const loading = document.getElementById('pdfLoading');
+            const progress = document.getElementById('pdfProgress');
+            const progressFill = document.getElementById('pdfProgressFill');
+            const progressMessage = document.getElementById('pdfProgressMessage');
+            const progressLog = document.getElementById('pdfProgressLog');
+            const result = document.getElementById('pdfResult');
+            
+            loading.classList.add('show');
+            progress.classList.add('show');
+            result.classList.remove('show');
+
+            // 显示停止按钮
+            const stopBtn = document.getElementById('stopProcessBtn');
+            if (stopBtn) {
+                stopBtn.style.display = 'inline-block';
+                stopBtn.disabled = false;
+                stopBtn.textContent = '停止处理';
+            }
+
+            // 重置进度
+            progressFill.style.width = '0%';
+            progressMessage.textContent = '准备开始处理...';
+            progressLog.innerHTML = '';
+            
+            // 保存处理状态
+            saveProcessingStatus({ isProcessing: true, progress: 0, message: '准备开始处理...', log: [] });
+            
+            try {
+                if (eventSource) {
+                    eventSource.close();
+                }
+                
+                if (selectedFiles) {
+                    // 先发送POST请求处理选定文件
+                    await fetch(`${API_BASE}/process_selected_files`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ files: selectedFiles })
+                    });
+                    
+                    // 然后通过SSE获取进度
+                    eventSource = new EventSource(`${API_BASE}/process_pdfs_stream`);
+                } else {
+                    // 处理所有文件
+                    eventSource = new EventSource(`${API_BASE}/process_pdfs_stream`);
+                }
+                
+                eventSource.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    
+                    // 更新进度条
+                    if (data.progress !== undefined) {
+                        progressFill.style.width = `${data.progress}%`;
+                    }
+                    
+                    // 更新消息
+                    if (data.message) {
+                        progressMessage.textContent = data.message;
+                        
+                        // 添加到日志
+                        const logEntry = document.createElement('div');
+                        logEntry.textContent = data.message;
+                        progressLog.appendChild(logEntry);
+                        // 自动滚动到底部
+                        progressLog.scrollTop = progressLog.scrollHeight;
+                    }
+                    
+                    // 保存处理状态
+                    saveProcessingStatus({
+                        isProcessing: data.is_processing,
+                        progress: data.progress || 0,
+                        message: data.message || progressMessage.textContent,
+                        log: Array.from(progressLog.children).map(child => child.textContent)
+                    });
+                    
+                    // 如果处理完成，显示结果
+                    if (!data.is_processing && data.result) {
+                        eventSource.close();
+                        eventSource = null;
+                        
+                        // 完成进度
+                        progressFill.style.width = '100%';
+                        progressMessage.textContent = '处理完成！';
+                        
+                        // 显示结果
+                        let resultHtml = '<h3>处理结果</h3>';
+                        
+                        if (data.result && data.result.extraction_results) {
+                            const extractionResults = data.result.extraction_results;
+                            let successCount = 0;
+                            let errorCount = 0;
+                            
+                            resultHtml += '<div style="margin-bottom: 20px;"><strong>汇总:</strong><br>';
+                            
+                            for (const [subject, files] of Object.entries(extractionResults)) {
+                                for (const [filename, fileResult] of Object.entries(files)) {
+                                    if (fileResult.status === 'success') {
+                                        successCount++;
+                                    } else {
+                                        errorCount++;
+                                    }
+                                }
+                            }
+                            
+                            resultHtml += `成功: ${successCount} 个文件, 失败: ${errorCount} 个文件</div>`;
+                            resultHtml += '<div style="margin-top: 20px;"><strong>详细信息:</strong><br>';
+                            resultHtml += '<pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;">';
+                            resultHtml += JSON.stringify(data.result, null, 2);
+                            resultHtml += '</pre></div>';
+                        } else {
+                            resultHtml += `<pre>${JSON.stringify(data.result, null, 2)}</pre>`;
+                        }
+                        
+                        result.innerHTML = resultHtml;
+                        result.classList.add('show');
+                        
+                        // 处理完成后自动加载知识地图
+                        loadKnowledgeMap();
+                        
+                        // 重新加载文件列表
+                        loadPendingFiles();
+                        
+                        // 清除处理状态
+                        clearProcessingStatus();
+                        
+                        loading.classList.remove('show');
+
+                        // 隐藏停止按钮
+                        const stopBtn = document.getElementById('stopProcessBtn');
+                        if (stopBtn) stopBtn.style.display = 'none';
+                    }
+                };
+
+                eventSource.onerror = function(event) {
+                    console.error('SSE错误:', event);
+                    if (eventSource) {
+                        eventSource.close();
+                        eventSource = null;
+                    }
+
+                    progressMessage.textContent = '处理失败';
+                    result.innerHTML = `<h3>错误</h3><p>连接服务器失败</p>`;
+                    result.classList.add('show');
+
+                    // 清除处理状态
+                    clearProcessingStatus();
+
+                    loading.classList.remove('show');
+
+                    // 隐藏停止按钮
+                    const stopBtnErr = document.getElementById('stopProcessBtn');
+                    if (stopBtnErr) stopBtnErr.style.display = 'none';
+                };
+            } catch (error) {
+                progressMessage.textContent = '处理失败';
+                result.innerHTML = `<h3>错误</h3><p>${error.message}</p>`;
+                result.classList.add('show');
+                
+                // 清除处理状态
+                clearProcessingStatus();
+                
+                loading.classList.remove('show');
+            }
+        }
+        
+        function restoreProcessingStatus() {
+            const savedStatus = loadProcessingStatus();
+            if (savedStatus && savedStatus.isProcessing) {
+                const progress = document.getElementById('pdfProgress');
+                const progressFill = document.getElementById('pdfProgressFill');
+                const progressMessage = document.getElementById('pdfProgressMessage');
+                const progressLog = document.getElementById('pdfProgressLog');
+                const loading = document.getElementById('pdfLoading');
+                
+                // 显示进度条
+                progress.classList.add('show');
+                loading.classList.add('show');
+                
+                // 恢复进度
+                progressFill.style.width = `${savedStatus.progress}%`;
+                progressMessage.textContent = savedStatus.message;
+                
+                // 恢复日志
+                if (savedStatus.log && Array.isArray(savedStatus.log)) {
+                    progressLog.innerHTML = '';
+                    savedStatus.log.forEach(message => {
+                        const logEntry = document.createElement('div');
+                        logEntry.textContent = message;
+                        progressLog.appendChild(logEntry);
+                    });
+                    progressLog.scrollTop = progressLog.scrollHeight;
+                }
+                
+                // 重新连接SSE
+                if (!eventSource) {
+                    eventSource = new EventSource(`${API_BASE}/process_pdfs_stream`);
+                    
+                    eventSource.onmessage = function(event) {
+                        const data = JSON.parse(event.data);
+                        
+                        // 更新进度条
+                        if (data.progress !== undefined) {
+                            progressFill.style.width = `${data.progress}%`;
+                        }
+                        
+                        // 更新消息
+                        if (data.message) {
+                            progressMessage.textContent = data.message;
+                            
+                            // 添加到日志
+                            const logEntry = document.createElement('div');
+                            logEntry.textContent = data.message;
+                            progressLog.appendChild(logEntry);
+                            // 自动滚动到底部
+                            progressLog.scrollTop = progressLog.scrollHeight;
+                        }
+                        
+                        // 保存处理状态
+                        saveProcessingStatus({
+                            isProcessing: data.is_processing,
+                            progress: data.progress || 0,
+                            message: data.message || progressMessage.textContent,
+                            log: Array.from(progressLog.children).map(child => child.textContent)
+                        });
+                        
+                        // 如果处理完成，显示结果
+                        if (!data.is_processing && data.result) {
+                            eventSource.close();
+                            eventSource = null;
+                            
+                            // 完成进度
+                            progressFill.style.width = '100%';
+                            progressMessage.textContent = '处理完成！';
+                            
+                            // 显示结果
+                            let resultHtml = '<h3>处理结果</h3>';
+                            
+                            if (data.result && data.result.extraction_results) {
+                                const extractionResults = data.result.extraction_results;
+                                let successCount = 0;
+                                let errorCount = 0;
+                                
+                                resultHtml += '<div style="margin-bottom: 20px;"><strong>汇总:</strong><br>';
+                                
+                                for (const [subject, files] of Object.entries(extractionResults)) {
+                                    for (const [filename, fileResult] of Object.entries(files)) {
+                                        if (fileResult.status === 'success') {
+                                            successCount++;
+                                        } else {
+                                            errorCount++;
+                                        }
+                                    }
+                                }
+                                
+                                resultHtml += `成功: ${successCount} 个文件, 失败: ${errorCount} 个文件</div>`;
+                                resultHtml += '<div style="margin-top: 20px;"><strong>详细信息:</strong><br>';
+                                resultHtml += '<pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;">';
+                                resultHtml += JSON.stringify(data.result, null, 2);
+                                resultHtml += '</pre></div>';
+                            } else {
+                                resultHtml += `<pre>${JSON.stringify(data.result, null, 2)}</pre>`;
+                            }
+                            
+                            const result = document.getElementById('pdfResult');
+                            result.innerHTML = resultHtml;
+                            result.classList.add('show');
+                            
+                            // 处理完成后自动加载知识地图
+                            loadKnowledgeMap();
+                            
+                            // 重新加载文件列表
+                            loadPendingFiles();
+                            
+                            // 清除处理状态
+                            clearProcessingStatus();
+                            
+                            loading.classList.remove('show');
+                        }
+                    };
+                    
+                    eventSource.onerror = function(event) {
+                        console.error('SSE错误:', event);
+                        if (eventSource) {
+                            eventSource.close();
+                            eventSource = null;
+                        }
+                        
+                        progressMessage.textContent = '处理失败';
+                        const result = document.getElementById('pdfResult');
+                        result.innerHTML = `<h3>错误</h3><p>连接服务器失败</p>`;
+                        result.classList.add('show');
+                        
+                        // 清除处理状态
+                        clearProcessingStatus();
+                        
+                        loading.classList.remove('show');
+                    };
+                }
+            }
+        }
+        
+        async function generateTest() {
+            const loading = document.getElementById('testLoading');
+            const result = document.getElementById('testResult');
+            const subject = document.getElementById('subject').value;
+            const grade = document.getElementById('grade').value;
+            
+            loading.classList.add('show');
+            result.classList.remove('show');
+            
+            try {
+                const response = await fetch(`${API_BASE}/generate_test`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ subject, grade })
+                });
+                const data = await response.json();
+                
+                result.innerHTML = `
+                    <h3>测试题目</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                result.classList.add('show');
+            } catch (error) {
+                result.innerHTML = `<h3>错误</h3><p>${error.message}</p>`;
+                result.classList.add('show');
+            } finally {
+                loading.classList.remove('show');
+            }
+        }
+        
+        async function evaluateTest() {
+            const loading = document.getElementById('evalLoading');
+            const result = document.getElementById('evalResult');
+            const questionsInput = document.getElementById('questions').value;
+            const answersInput = document.getElementById('answers').value;
+            
+            loading.classList.add('show');
+            result.classList.remove('show');
+            
+            try {
+                const testQuestions = JSON.parse(questionsInput);
+                const studentAnswers = JSON.parse(answersInput);
+                
+                const response = await fetch(`${API_BASE}/evaluate_test`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ test_questions: testQuestions, student_answers: studentAnswers })
+                });
+                const data = await response.json();
+                
+                result.innerHTML = `
+                    <h3>评估结果</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                result.classList.add('show');
+            } catch (error) {
+                result.innerHTML = `<h3>错误</h3><p>${error.message}</p>`;
+                result.classList.add('show');
+            } finally {
+                loading.classList.remove('show');
+            }
+        }
+        
+        // 知识地图变量
+        let network = null;
+        
+        async function loadKnowledgeMap() {
+            const subject = document.getElementById('mapSubject').value;
+            const mapInfo = document.getElementById('mapInfo');
+            
+            try {
+                mapInfo.innerHTML = '<h4>加载中...</h4><p>正在加载知识地图，请稍候...</p>';
+                
+                const response = await fetch(`${API_BASE}/get_knowledge_map/${subject}`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // 确保数据存在
+                    const nodesData = data.nodes || [];
+                    const edgesData = data.edges || [];
+                    
+                    // 准备数据
+                    const nodes = new vis.DataSet(nodesData);
+                    const edges = new vis.DataSet(edgesData);
+                    
+                    // 配置选项
+                    const options = {
+                        nodes: {
+                            shape: 'box',
+                            size: 25,
+                            font: {
+                                size: 12
+                            },
+                            color: {
+                                background: '#667eea',
+                                border: '#764ba2',
+                                highlight: {
+                                    background: '#764ba2',
+                                    border: '#667eea'
+                                }
+                            }
+                        },
+                        edges: {
+                            width: 2,
+                            color: '#888',
+                            font: {
+                                size: 10
+                            }
+                        },
+                        physics: {
+                            enabled: true,
+                            stabilization: {
+                                enabled: true,
+                                iterations: 1000
+                            }
+                        },
+                        interaction: {
+                            hover: true,
+                            tooltipDelay: 200
+                        }
+                    };
+                    
+                    // 创建网络
+                    const container = document.getElementById('knowledge-map');
+                    network = new vis.Network(container, { nodes, edges }, options);
+                    
+                    // 节点点击事件
+                    network.on('click', function(params) {
+                        if (params.nodes.length > 0) {
+                            const nodeId = params.nodes[0];
+                            const node = nodes.get(nodeId);
+                            if (node) {
+                                mapInfo.innerHTML = `
+                                    <h4>知识点详情</h4>
+                                    <p><strong>名称:</strong> ${node.label || '未知'}</p>
+                                    <p><strong>学科:</strong> ${node.subject || '未知'}</p>
+                                    <p><strong>年级:</strong> ${node.grade || '未知'}</p>
+                                    <p><strong>内容:</strong> ${node.content || '无'}</p>
+                                `;
+                            }
+                        }
+                    });
+                    
+                    if (nodesData.length > 0) {
+                        mapInfo.innerHTML = `<h4>知识点信息</h4><p>知识地图加载完成，共 ${nodesData.length} 个知识点</p>`;
+                    } else {
+                        mapInfo.innerHTML = `<h4>提示</h4><p>知识地图为空，请先处理PDF文档</p>`;
+                    }
+                } else {
+                    mapInfo.innerHTML = `<h4>错误</h4><p>${data.message || '加载失败'}</p>`;
+                }
+            } catch (error) {
+                mapInfo.innerHTML = `<h4>错误</h4><p>${error.message}</p>`;
+            }
+        }
+        
+        // 页面加载时自动加载文件列表和恢复处理状态
+        window.onload = function() {
+            checkHealth();
+            loadPendingFiles();
+            restoreProcessingStatus();
+        };
+        
+        // 页面关闭时清理资源
+        window.onbeforeunload = function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        };
+    </script>
+</body>
+</html>

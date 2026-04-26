@@ -1,0 +1,25 @@
+# 基础依赖
+fastapi
+uvicorn
+python-dotenv
+
+# PDF解析
+pdfplumber
+PyPDF2
+
+# 数据处理
+pandas
+numpy
+
+# 知识图谱
+networkx
+
+# AI模型集成
+dashscope  # 阿里云百炼SDK
+
+# 工具库
+requests
+beautifulsoup4
+
+# 前端集成
+fastapi-cors
