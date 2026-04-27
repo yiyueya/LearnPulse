@@ -310,6 +310,8 @@ class ContentExtractorAgent:
         results = {}
         total_files = len(selected_files)
         processed_files = 0
+        success_files = 0
+        failed_files = 0
         skipped_files = 0
 
         if total_files == 0:
@@ -349,14 +351,22 @@ class ContentExtractorAgent:
                 results[subject] = {}
             results[subject][Path(pdf_path).name] = result
 
+            # Track success/failure based on result status
+            if result.get("status") == "success" or result.get("status") == "warning":
+                success_files += 1
+            else:
+                failed_files += 1
+
             processed_files += 1
             progress = (processed_files / total_files) * 100 if total_files > 0 else 100
-            self._update_progress(f"已处理 {processed_files}/{total_files} 个文件 (跳过 {skipped_files} 个已完成文件)", progress)
+            self._update_progress(f"已处理 {processed_files}/{total_files} 个文件 (成功 {success_files} 个，失败 {failed_files} 个)", progress)
 
         self._update_progress("选定文件处理完成", 100)
+        status = "success" if failed_files == 0 else "partial"
         return {
+            "status": status,
             "extraction_results": results,
-            "message": f"共处理 {processed_files} 个文件，跳过 {skipped_files} 个已完成文件"
+            "message": f"共处理 {processed_files} 个文件，成功 {success_files} 个，失败 {failed_files} 个"
         }
 
     def get_pending_files(self):

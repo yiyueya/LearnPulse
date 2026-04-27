@@ -112,7 +112,12 @@ class AgentCoordinator:
             self.check_cancel()
 
             self._update_progress("开始构建知识地图")
-            knowledge_map_future = executor.submit(self.knowledge_graph.build_all_knowledge_maps)
+            # Extract unique subjects from selected_files to build only needed subjects
+            selected_subjects = list(set(f.get("subject") for f in selected_files if f.get("subject")))
+            if selected_subjects:
+                knowledge_map_future = executor.submit(self.knowledge_graph.build_knowledge_maps, extracted_subjects)
+            else:
+                knowledge_map_future = executor.submit(self.knowledge_graph.build_all_knowledge_maps)
 
             try:
                 knowledge_map_results = knowledge_map_future.result()
@@ -124,7 +129,7 @@ class AgentCoordinator:
             results["knowledge_map_results"] = knowledge_map_results
 
         return results
-    
+
     def get_pending_files(self):
         """获取待处理的文件列表"""
         return self.content_extractor.get_pending_files()
