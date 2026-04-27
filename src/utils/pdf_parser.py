@@ -51,25 +51,25 @@ class PDFParser:
             return ""
     
     def extract_images(self, pdf_path):
-        """从 PDF 文件中提取图片"""
+        """从 PDF 文件中提取图片（返回列表，保持向后兼容）"""
         images = []
         try:
             doc = fitz.open(pdf_path)
-            
+
             def extract_page_images(page_num):
                 page_images = []
                 page = doc[page_num]
                 image_list = page.get_images(full=True)
-                
+
                 for img_index, img in enumerate(image_list):
                     xref = img[0]
                     base_image = doc.extract_image(xref)
                     image_bytes = base_image["image"]
                     image_ext = base_image["ext"]
-                    
+
                     if MIN_IMAGE_SIZE > 0 and len(image_bytes) < MIN_IMAGE_SIZE:
                         continue
-                    
+
                     page_images.append({
                         "page": page_num + 1,
                         "bytes": image_bytes,
@@ -78,23 +78,60 @@ class PDFParser:
                         "size": len(image_bytes)
                     })
                 return page_images
-            
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                future_to_page = {executor.submit(extract_page_images, page_num): page_num 
+                future_to_page = {executor.submit(extract_page_images, page_num): page_num
                                  for page_num in range(len(doc))}
-                
+
                 for future in concurrent.futures.as_completed(future_to_page):
                     try:
                         page_images = future.result()
                         images.extend(page_images)
                     except Exception as e:
                         print(f"处理页面图片失败: {e}")
-            
+
             doc.close()
             return images
         except Exception as e:
             logger.error(f"提取图片错误：{e}")
             return []
+
+    def extract_images_generator(self, pdf_path):
+        """从 PDF 文件中提取图片（生成器版本，避免内存堆积）
+
+        Yields images one at a time instead of loading all into memory.
+        Each yielded image has its bytes cleared after processing to release memory.
+        """
+        try:
+            doc = fitz.open(pdf_path)
+            total_pages = len(doc)
+
+            for page_num in range(total_pages):
+                page = doc[page_num]
+                image_list = page.get_images(full=True)
+
+                for img_index, img in enumerate(image_list):
+                    xref = img[0]
+                    base_image = doc.extract_image(xref)
+                    image_bytes = base_image["image"]
+                    image_ext = base_image["ext"]
+
+                    if MIN_IMAGE_SIZE > 0 and len(image_bytes) < MIN_IMAGE_SIZE:
+                        continue
+
+                    img_data = {
+                        "page": page_num + 1,
+                        "bytes": image_bytes,
+                        "ext": image_ext,
+                        "index": img_index,
+                        "size": len(image_bytes)
+                    }
+                    yield img_data
+
+            doc.close()
+        except Exception as e:
+            logger.error(f"提取图片错误（生成器）：{e}")
+            return
 
     def save_image_to_temp(self, img_data):
         """保存图片到临时文件"""

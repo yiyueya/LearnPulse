@@ -8,7 +8,7 @@ from src.utils.logger import logger
 from src.utils.quota_tracker import MiniMaxVLMError
 import json
 from pathlib import Path
-from config.config import JSON_DIR, IMAGE_PROCESSING_ENABLED, MAX_IMAGES_PER_PDF
+from config.config import JSON_DIR, IMAGE_PROCESSING_ENABLED
 
 class ContentExtractorAgent:
     """内容提取Agent，负责从PDF文档中提取知识点"""
@@ -102,46 +102,63 @@ class ContentExtractorAgent:
             self._check_cancel()
             self._update_progress(f"提取 PDF 图片：{filename}", self._calculate_step_progress(2, 4, 0))
             logger.debug(f"[ContentExtractor] Starting image extraction from {filename}")
-            images = self.pdf_parser.extract_images(pdf_path)
-            image_count = len(images)
-            logger.info(f"[ContentExtractor] Found {image_count} images in {filename}")
 
-            # 限制图片数量，防止内存溢出
-            if image_count > MAX_IMAGES_PER_PDF:
-                images = images[:MAX_IMAGES_PER_PDF]
-                self._update_progress(f"发现 {image_count} 张图片，超过限制 {MAX_IMAGES_PER_PDF}，只处理前 {MAX_IMAGES_PER_PDF} 张")
-                image_count = MAX_IMAGES_PER_PDF
-            else:
-                self._update_progress(f"发现 {image_count} 张图片")
+            # Streaming: process images one by one, save immediately to avoid memory buildup
+            # No arbitrary limit on number of images - process all images found
+            images_description = []
+            image_count = 0
 
-            if image_count > 0:
-                self._check_cancel()
-                self._update_progress(f"开始理解 {image_count} 张图片的内容...", self._calculate_step_progress(2, 4, 10))
+            try:
+                # Use streaming generator to avoid loading all images into memory
+                for img_data in self.pdf_parser.extract_images_generator(pdf_path):
+                    self._check_cancel()
+                    image_count += 1
 
-                def image_progress_callback(current, total, message):
-                    step_progress = 10 + (current / total) * 30
-                    self._update_progress(message, self._calculate_step_progress(2, 4, step_progress))
+                    # Save image to temp file
+                    temp_path = self.pdf_parser.save_image_to_temp(img_data)
+                    if not temp_path:
+                        continue
 
-                try:
-                    images_description = self.pdf_parser.get_images_descriptions_batch(
-                        images,
-                        self.ai_service,
-                        "这是一张小学教材的图片。请描述图片中的内容，包括其中的文字、公式、图表等信息。如果是数学题目或知识点，请详细说明。如果是图表或插图，请描述其含义。",
-                        progress_callback=image_progress_callback
-                    )
-                except MiniMaxVLMError as e:
-                    logger.warning(f"[ContentExtractor] Image quota exhausted, skipping image understanding: {e}")
-                    self._update_progress(f"图片额度耗尽，跳过图片理解: {e}", self._calculate_step_progress(2, 4, 40))
-                    images_description = []
-                    extracted_data["images_description"] = images_description
-                    self.cache_manager.set_process_cache(pdf_path, {"extracted_data": extracted_data})
-                    # 继续处理后续步骤，不因为额度问题中断整个PDF处理
+                    # Progress update for each image processed
+                    self._update_progress(f"处理第 {image_count} 张图片...", self._calculate_step_progress(2, 4, 10 + min((image_count % 50) * 0.5, 30)))
 
-                self._check_cancel()
-                extracted_data["images_description"] = images_description
-                self._update_progress(f"已理解 {len(images_description)}/{image_count} 张图片", self._calculate_step_progress(2, 4, 40))
+                    try:
+                        # Check cache first
+                        cached = self.cache_manager.get_image_cache(temp_path)
+                        if cached:
+                            description = cached
+                        else:
+                            # Process single image
+                            description = self.ai_service.understand_image(
+                                image_path=temp_path,
+                                prompt="这是一张小学教材的图片。请描述图片中的内容，包括其中的文字、公式、图表等信息。如果是数学题目或知识点，请详细说明。如果是图表或插图，请描述其含义。"
+                            )
+                            if description:
+                                self.cache_manager.set_image_cache(temp_path, description)
 
-                self.cache_manager.set_process_cache(pdf_path, {"extracted_data": extracted_data})
+                        if description:
+                            images_description.append({
+                                "page": img_data["page"],
+                                "description": description
+                            })
+
+                            # Save progress immediately to disk to avoid memory buildup
+                            extracted_data["images_description"] = images_description
+                            self.cache_manager.set_process_cache(pdf_path, {"extracted_data": extracted_data})
+
+                    finally:
+                        # Release temp file memory immediately
+                        Path(temp_path).unlink(missing_ok=True)
+
+                self._update_progress(f"已理解 {len(images_description)} 张图片", self._calculate_step_progress(2, 4, 40))
+
+            except MiniMaxVLMError as e:
+                logger.warning(f"[ContentExtractor] Image quota exhausted, skipping image understanding: {e}")
+                self._update_progress(f"图片额度耗尽，跳过图片理解: {e}", self._calculate_step_progress(2, 4, 40))
+                # Keep whatever images were processed so far
+
+            extracted_data["images_description"] = images_description
+            self.cache_manager.set_process_cache(pdf_path, {"extracted_data": extracted_data})
 
         # 更新处理状态
         self.cache_manager.set_process_status(pdf_path, 'processing', current_step=3, total_steps=4)

@@ -27,7 +27,7 @@ IMAGE_OCR_THRESHOLD = 0.3  # OCR阈值，C类图片(可OCR)超过此比例则启
 IMAGE_AI_MIN_SIZE = 100  # 需要AI处理的最小图片尺寸(像素)
 MIN_IMAGE_SIZE = 0  # 最小图片大小（字节），设置为0表示不限制
 MAX_MERGED_SIZE_MB = 5  # 合并后图片的最大大小（MB），MiniMax推荐值
-MAX_IMAGES_PER_PDF = 50  # 每个PDF处理的最大图片数（WSL 内存受限）
+MAX_IMAGES_PER_PDF = 99999  # 每个PDF处理的最大图片数（已移除限制，改为流式处理）
 MAX_IMAGE_BATCH_WORKERS = 2  # 图片批处理并发数（WSL 内存受限）
 
 # 缓存配置

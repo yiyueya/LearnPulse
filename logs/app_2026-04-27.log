@@ -4,3 +4,27 @@
 2026-04-27 16:10:08 | INFO     | 知识地图获取成功: 0个节点, 0条边
 2026-04-27 16:10:10 | INFO     | 获取知识地图: 数学
 2026-04-27 16:10:10 | INFO     | 知识地图获取成功: 0个节点, 0条边
+2026-04-27 16:16:11 | LearnPulse                     | INFO     | 应用启动中...
+2026-04-27 16:16:12 | LearnPulse                     | INFO     | 健康检查请求
+2026-04-27 16:17:06 | LearnPulse                     | INFO     | 健康检查请求
+2026-04-27 16:17:10 | LearnPulse                     | DEBUG    | [Coordinator] Starting selected document processing: 2 files
+2026-04-27 16:17:10 | LearnPulse                     | DEBUG    | [ContentExtractor] Starting PDF processing: 【人教版】一年级上册(2024秋版)数学电子课本.pdf
+2026-04-27 16:17:10 | LearnPulse                     | DEBUG    | [ContentExtractor] Extracting text from PDF: 【人教版】一年级上册(2024秋版)数学电子课本.pdf
+2026-04-27 16:17:28 | LearnPulse                     | INFO     | [ContentExtractor] Text extracted: 20682 chars from 【人教版】一年级上册(2024秋版)数学电子课本.pdf
+2026-04-27 16:17:28 | LearnPulse                     | DEBUG    | [ContentExtractor] Starting image extraction from 【人教版】一年级上册(2024秋版)数学电子课本.pdf
+2026-04-27 16:17:31 | LearnPulse                     | INFO     | [ContentExtractor] Found 929 images in 【人教版】一年级上册(2024秋版)数学电子课本.pdf
+2026-04-27 16:17:31 | LearnPulse                     | INFO     | [AIService] Batch processing 50 images in 1 batches
+2026-04-27 16:17:32 | LearnPulse                     | DEBUG    | [AIService] Starting image understanding: /home/lin/.openclaw/projects/LearnPulse/temp/temp_image_1_1.png_combined.jpg
+2026-04-27 16:18:18 | LearnPulse                     | INFO     | 图片理解（API） 耗时: 45.87秒
+2026-04-27 16:18:18 | LearnPulse                     | INFO     | 批量处理 50 张图片 耗时: 46.35秒
+2026-04-27 16:18:18 | LearnPulse                     | DEBUG    | [ContentExtractor] Starting AI knowledge extraction for 【人教版】一年级上册(2024秋版)数学电子课本.pdf
+2026-04-27 16:19:18 | LearnPulse                     | ERROR    | [ContentExtractor] Failed to save results for 【人教版】一年级上册(2024秋版)数学电子课本.pdf: Object of type PosixPath is not JSON serializable
+2026-04-27 16:19:18 | LearnPulse                     | DEBUG    | [ContentExtractor] Starting PDF processing: 【人教版】一年级下册(2025春版)语文电子课本.pdf
+2026-04-27 16:19:18 | LearnPulse                     | DEBUG    | [ContentExtractor] Extracting text from PDF: 【人教版】一年级下册(2025春版)语文电子课本.pdf
+2026-04-27 16:19:32 | LearnPulse                     | INFO     | [ContentExtractor] Text extracted: 52165 chars from 【人教版】一年级下册(2025春版)语文电子课本.pdf
+2026-04-27 16:19:32 | LearnPulse                     | INFO     | 获取知识地图: 数学
+2026-04-27 16:19:32 | LearnPulse                     | INFO     | 知识地图获取成功: 0个节点, 0条边
+2026-04-27 16:24:43 | LearnPulse                     | INFO     | 应用启动中...
+2026-04-27 16:24:45 | LearnPulse                     | INFO     | 健康检查请求
+2026-04-27 16:28:22 | LearnPulse                     | INFO     | 应用启动中...
+2026-04-27 16:28:24 | LearnPulse                     | INFO     | 健康检查请求
