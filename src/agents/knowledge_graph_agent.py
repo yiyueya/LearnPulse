@@ -19,7 +19,10 @@ class KnowledgeGraphAgent:
                 items.extend(self._extract_knowledge_items(item, subject))
         elif isinstance(data, dict):
             # 检查是否是知识点节点（有实质内容）
-            if "知识点" in str(data) or "生字" in str(data) or "内容" in str(data):
+            # 匹配条件：name字段 + content/知识点字段（直接字段，非字符串搜索）
+            has_name = bool(data.get("name") or data.get("标题") or data.get("知识点名称"))
+            has_content = bool(data.get("content") or data.get("知识点") or data.get("内容"))
+            if has_name and has_content:
                 # 提取名称
                 name = (data.get("标题") or data.get("name") or
                         data.get("知识点名称") or
@@ -29,7 +32,7 @@ class KnowledgeGraphAgent:
                 if isinstance(knowledge_list, list) and knowledge_list:
                     content = "; ".join(str(k) for k in knowledge_list[:3])
                 else:
-                    content = data.get("content") or data.get("内容") or str(data)[:200]
+                    content = data.get("content") or data.get("内容") or ""
                 # 提取年级
                 grade = data.get("grade") or data.get("年级") or "一年级"
                 items.append({"name": name, "content": content, "grade": grade})
