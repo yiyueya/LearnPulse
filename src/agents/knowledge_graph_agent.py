@@ -11,6 +11,34 @@ class KnowledgeGraphAgent:
         self.knowledge_graph = KnowledgeGraph()
         self.json_dir = JSON_DIR
 
+    def _extract_knowledge_items(self, data, subject):
+        """递归从JSON数据中提取所有知识点项"""
+        items = []
+        if isinstance(data, list):
+            for item in data:
+                items.extend(self._extract_knowledge_items(item, subject))
+        elif isinstance(data, dict):
+            # 检查是否是知识点节点（有实质内容）
+            if "知识点" in str(data) or "生字" in str(data) or "内容" in str(data):
+                # 提取名称
+                name = (data.get("标题") or data.get("name") or
+                        data.get("知识点名称") or
+                        str(data.get("单元", "")) + "_" + str(data.get("序号", "")))
+                # 提取内容摘要
+                knowledge_list = data.get("知识点", [])
+                if isinstance(knowledge_list, list) and knowledge_list:
+                    content = "; ".join(str(k) for k in knowledge_list[:3])
+                else:
+                    content = data.get("content") or data.get("内容") or str(data)[:200]
+                # 提取年级
+                grade = data.get("grade") or data.get("年级") or "一年级"
+                items.append({"name": name, "content": content, "grade": grade})
+            # 递归处理子节点
+            for value in data.values():
+                if isinstance(value, (dict, list)):
+                    items.extend(self._extract_knowledge_items(value, subject))
+        return items
+
     def build_knowledge_map(self, subject):
         """构建指定学科的知识地图"""
         # 加载该学科的所有知识点JSON文件
@@ -18,35 +46,44 @@ class KnowledgeGraphAgent:
         for file in self.json_dir.iterdir():
             if subject in file.name and file.suffix == ".json":
                 subject_files.append(file)
-        
+
         if not subject_files:
             return {"status": "error", "message": f"未找到{subject}学科的知识点文件"}
-        
+
         # 构建知识图谱
         node_id_counter = 1
+        all_items = []
         for file in subject_files:
             with open(file, 'r', encoding='utf-8') as f:
                 try:
                     data = json.load(f)
-                    # 假设data是知识点列表
-                    if isinstance(data, list):
-                        for item in data:
-                            node_id = f"{subject}_{node_id_counter}"
-                            node_id_counter += 1
-                            self.knowledge_graph.add_knowledge_point(
-                                node_id,
-                                item.get("name", ""),
-                                subject,
-                                item.get("grade", ""),
-                                item.get("content", "")
-                            )
-                    # 处理其他可能的JSON结构
-                    elif isinstance(data, dict):
-                        # 具体处理逻辑根据实际JSON结构调整
-                        pass
+                    items = self._extract_knowledge_items(data, subject)
+                    all_items.extend(items)
                 except json.JSONDecodeError:
                     continue
-        
+
+        # 去重并添加节点
+        seen_names = set()
+        for item in all_items:
+            name = item.get("name", "")
+            if not name or name in seen_names:
+                continue
+            seen_names.add(name)
+            node_id = f"{subject}_{node_id_counter}"
+            node_id_counter += 1
+            self.knowledge_graph.add_knowledge_point(
+                node_id,
+                name,
+                subject,
+                item.get("grade", ""),
+                item.get("content", "")
+            )
+
+        # 添加知识点之间的关联边（相邻节点之间）
+        nodes_list = list(self.knowledge_graph.graph.nodes)
+        for i in range(len(nodes_list) - 1):
+            self.knowledge_graph.add_relation(nodes_list[i], nodes_list[i + 1], "后续关联")
+
         # 保存知识图谱
         self.knowledge_graph.save_graph(f"{subject}_knowledge_map.json")
         return {"status": "success", "message": f"{subject}学科知识地图构建完成"}

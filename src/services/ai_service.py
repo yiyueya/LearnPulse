@@ -68,6 +68,43 @@ class AIService:
         except Exception as e:
             print(f"保存缓存失败: {e}")
 
+    def _extract_json_from_response(self, raw_content):
+        """从AI响应中提取JSON，处理markdown代码块或思考块包裹的情况"""
+        import re
+        # 去除markdown代码块标记
+        content = raw_content.strip()
+        # 去掉 ```json 或 ``` 包裹的代码块
+        content = re.sub(r'^```json\s*', '', content)
+        content = re.sub(r'^```\s*', '', content)
+        content = re.sub(r'\s*```$', '', content)
+        # 去掉 ```json 或 ``` 包裹（可能在开头或结尾）
+        content = re.sub(r'^```json\s*', '', content, flags=re.MULTILINE)
+        content = re.sub(r'^```\s*', '', content, flags=re.MULTILINE)
+        content = re.sub(r'\s*```\s*$', '', content)
+
+        # 去掉思考过程标记
+        content = re.sub(r'<think>[\s\S]*?</think>', '', content)
+
+        content = content.strip()
+
+        # 直接尝试解析
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+
+        # 尝试找第一个 { 到最后一个 } 作为完整JSON
+        first_brace = content.find('{')
+        last_brace = content.rfind('}')
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            json_str = content[first_brace:last_brace + 1]
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                pass
+
+        return None
+
     def extract_knowledge(self, text, max_retries=3):
         """从文本中提取知识点"""
         json_schema_example = """{
@@ -119,10 +156,10 @@ class AIService:
                     result = response.json()
                     raw_content = result["choices"][0]["message"]["content"]
 
-                    try:
-                        json.loads(raw_content)
-                        return raw_content
-                    except json.JSONDecodeError:
+                    parsed = self._extract_json_from_response(raw_content)
+                    if parsed is not None:
+                        return json.dumps(parsed, ensure_ascii=False)
+                    else:
                         logger.warning(f"第 {attempt + 1} 次尝试：AI返回的不是有效JSON")
                         if attempt < max_retries - 1:
                             logger.info(f"重试中... ({attempt + 1}/{max_retries})")

@@ -38,7 +38,7 @@ MAX_CACHE_SIZE_MB = 100  # 最大缓存大小（MB）
 KNOWLEDGE_GRAPH_TYPE = "networkx"
 
 # 服务配置
-HOST = "127.0.0.1"
+HOST = "0.0.0.0"
 PORT = 8000
 
 # 日志配置
