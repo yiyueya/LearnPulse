@@ -96,6 +96,104 @@ class PDFParser:
             logger.error(f"提取图片错误：{e}")
             return []
 
+    def extract_images_smart_generator(self, pdf_path, ocr_callback=None):
+        """智能提取并分类图片（生成器版本，避免内存堆积）
+        
+        仅返回 A 类（知识图示）和 C 类（文字/公式，需OCR）图片。
+        B 类（装饰插画）直接跳过，不占用内存。
+        
+        Yields img_data dicts with added fields: value_class, reason, width, height, file_size
+        """
+        if not IMAGE_SMART_FILTER:
+            # 智能过滤关闭时，返回所有图片（按原流程处理）
+            for img_data in self.extract_images_generator(pdf_path):
+                img_data["value_class"] = "A"
+                img_data["reason"] = "smart_filter disabled"
+                yield img_data
+            return
+        
+        try:
+            doc = fitz.open(pdf_path)
+            total_pages = len(doc)
+            analyzer = ImageValueAnalyzer(
+                page_occupation_threshold=0.7,
+                min_file_size_kb=15,
+                min_dimension=IMAGE_AI_MIN_SIZE
+            )
+            
+            for page_num in range(total_pages):
+                page = doc[page_num]
+                image_list = page.get_images(full=True)
+                
+                for img_index, img in enumerate(image_list):
+                    xref = img[0]
+                    base_image = doc.extract_image(xref)
+                    image_bytes = base_image["image"]
+                    image_ext = base_image["ext"]
+                    
+                    if MIN_IMAGE_SIZE > 0 and len(image_bytes) < MIN_IMAGE_SIZE:
+                        continue
+                    
+                    img_data = {
+                        "page": page_num + 1,
+                        "bytes": image_bytes,
+                        "ext": image_ext,
+                        "index": img_index,
+                        "size": len(image_bytes)
+                    }
+                    
+                    # 保存临时文件用于分析
+                    temp_path = self.save_image_to_temp(img_data)
+                    if not temp_path:
+                        continue
+                    
+                    try:
+                        analysis = analyzer.analyze(temp_path)
+                        value_class = analysis["value_class"]
+                        
+                        # B类装饰插画：跳过，不占用AI额度
+                        if value_class == "B":
+                            logger.debug(f"[SmartFilter] Page {page_num+1} img {img_index}: B类装饰，跳过")
+                            Path(temp_path).unlink(missing_ok=True)
+                            continue
+                        
+                        # C类文字/公式：做OCR
+                        if value_class == "C":
+                            logger.debug(f"[SmartFilter] Page {page_num+1} img {img_index}: C类，执行OCR")
+                            if ocr_callback:
+                                try:
+                                    from PIL import Image
+                                    import pytesseract
+                                    pil_img = Image.open(temp_path)
+                                    ocr_text = pytesseract.image_to_string(pil_img, lang="chi_sim+eng")
+                                    if ocr_text.strip():
+                                        ocr_callback(ocr_text.strip(), page_num + 1)
+                                    pil_img.close()
+                                except Exception as e:
+                                    logger.debug(f"OCR failed for page {page_num+1}: {e}")
+                            Path(temp_path).unlink(missing_ok=True)
+                            continue
+                        
+                        # A类知识图示：带分析结果yield
+                        img_data["value_class"] = value_class
+                        img_data["reason"] = analysis.get("reason", "")
+                        img_data["width"] = analysis.get("width", 0)
+                        img_data["height"] = analysis.get("height", 0)
+                        img_data["file_size"] = analysis.get("file_size", 0)
+                        img_data["aspect_ratio"] = analysis.get("aspect_ratio", 0)
+                        img_data["temp_path"] = temp_path  # 保留temp_path让caller清理
+                        
+                        yield img_data
+                        
+                    except Exception as e:
+                        logger.warning(f"Image analysis failed: {e}")
+                        Path(temp_path).unlink(missing_ok=True)
+            
+            doc.close()
+        except Exception as e:
+            logger.error(f"提取图片错误（智能生成器）：{e}")
+            return
+
     def extract_images_generator(self, pdf_path):
         """从 PDF 文件中提取图片（生成器版本，避免内存堆积）
 

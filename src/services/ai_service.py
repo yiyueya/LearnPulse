@@ -205,6 +205,17 @@ class AIService:
                 logger.log_performance(timer_key, "图片理解（缓存）")
                 return cached_result
 
+            # 5MB size check for single image
+            try:
+                file_size_mb = Path(image_path).stat().st_size / 1024 / 1024
+                if file_size_mb > MAX_MERGED_SIZE_MB:
+                    logger.warning(f"[AIService] Image {Path(image_path).name} exceeds 5MB ({file_size_mb:.2f}MB), skipping")
+                    logger.stop_timer(timer_key)
+                    logger.log_performance(timer_key, "图片理解（跳过-过大）")
+                    return ""
+            except Exception as e:
+                logger.warning(f"[AIService] Could not check file size for {image_path}: {e}")
+
         # 检查额度
         if not self.quota_tracker.can_process():
             status = self.quota_tracker.get_status()

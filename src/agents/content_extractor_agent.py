@@ -8,7 +8,7 @@ from src.utils.logger import logger
 from src.utils.quota_tracker import MiniMaxVLMError
 import json
 from pathlib import Path
-from config.config import JSON_DIR, IMAGE_PROCESSING_ENABLED
+from config.config import JSON_DIR, IMAGE_PROCESSING_ENABLED, IMAGE_SMART_FILTER
 
 class ContentExtractorAgent:
     """内容提取Agent，负责从PDF文档中提取知识点"""
@@ -103,24 +103,38 @@ class ContentExtractorAgent:
             self._update_progress(f"提取 PDF 图片：{filename}", self._calculate_step_progress(2, 4, 0))
             logger.debug(f"[ContentExtractor] Starting image extraction from {filename}")
 
-            # Streaming: process images one by one, save immediately to avoid memory buildup
-            # No arbitrary limit on number of images - process all images found
+            # Smart streaming: use IMAGE_SMART_FILTER to skip B-class (decorative) images
+            # and process only A-class (knowledge diagrams) through AI
+            # C-class (text/formulas) are handled via OCR callback internally
             images_description = []
             image_count = 0
+            ai_processed_count = 0
+
+            def ocr_result_callback(ocr_text, page_num):
+                """C类图片OCR结果回调，附加到图片描述中"""
+                if ocr_text:
+                    images_description.append({
+                        "page": page_num,
+                        "description": f"[OCR文字] {ocr_text}",
+                        "is_ocr": True
+                    })
 
             try:
-                # Use streaming generator to avoid loading all images into memory
-                for img_data in self.pdf_parser.extract_images_generator(pdf_path):
+                # Use smart generator: skips B-class, yields only A-class for AI processing
+                for img_data in self.pdf_parser.extract_images_smart_generator(pdf_path, ocr_callback=ocr_result_callback):
                     self._check_cancel()
                     image_count += 1
 
-                    # Save image to temp file
-                    temp_path = self.pdf_parser.save_image_to_temp(img_data)
+                    # img_data already has temp_path if it's A-class (from smart generator)
+                    temp_path = img_data.get("temp_path")
                     if not temp_path:
                         continue
 
                     # Progress update for each image processed
-                    self._update_progress(f"处理第 {image_count} 张图片...", self._calculate_step_progress(2, 4, 10 + min((image_count % 50) * 0.5, 30)))
+                    self._update_progress(
+                        f"处理第 {image_count} 张图片 (AI已处理{ai_processed_count}张)...",
+                        self._calculate_step_progress(2, 4, 10 + min((image_count % 50) * 0.5, 30))
+                    )
 
                     try:
                         # Check cache first
@@ -128,7 +142,7 @@ class ContentExtractorAgent:
                         if cached:
                             description = cached
                         else:
-                            # Process single image
+                            # Process single image (5MB limit is checked inside understand_image)
                             description = self.ai_service.understand_image(
                                 image_path=temp_path,
                                 prompt="这是一张小学教材的图片。请描述图片中的内容，包括其中的文字、公式、图表等信息。如果是数学题目或知识点，请详细说明。如果是图表或插图，请描述其含义。"
@@ -137,9 +151,11 @@ class ContentExtractorAgent:
                                 self.cache_manager.set_image_cache(temp_path, description)
 
                         if description:
+                            ai_processed_count += 1
                             images_description.append({
                                 "page": img_data["page"],
-                                "description": description
+                                "description": description,
+                                "value_class": img_data.get("value_class", "A")
                             })
 
                             # Save progress immediately to disk to avoid memory buildup
@@ -150,7 +166,10 @@ class ContentExtractorAgent:
                         # Release temp file memory immediately
                         Path(temp_path).unlink(missing_ok=True)
 
-                self._update_progress(f"已理解 {len(images_description)} 张图片", self._calculate_step_progress(2, 4, 40))
+                self._update_progress(
+                    f"已理解 {ai_processed_count} 张A类图片 (共跳过 B/C 类 {image_count - ai_processed_count} 张)",
+                    self._calculate_step_progress(2, 4, 40)
+                )
 
             except MiniMaxVLMError as e:
                 logger.warning(f"[ContentExtractor] Image quota exhausted, skipping image understanding: {e}")
