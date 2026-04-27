@@ -115,7 +115,7 @@ class AgentCoordinator:
             # Extract unique subjects from selected_files to build only needed subjects
             selected_subjects = list(set(f.get("subject") for f in selected_files if f.get("subject")))
             if selected_subjects:
-                knowledge_map_future = executor.submit(self.knowledge_graph.build_knowledge_maps, extracted_subjects)
+                knowledge_map_future = executor.submit(self.knowledge_graph.build_knowledge_maps, selected_subjects)
             else:
                 knowledge_map_future = executor.submit(self.knowledge_graph.build_all_knowledge_maps)
 
