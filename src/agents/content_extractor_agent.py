@@ -209,7 +209,7 @@ class ContentExtractorAgent:
                 result_data = {
                     "status": "warning",
                     "message": "AI返回的不是有效JSON，已保存原始文本",
-                    "file": filepath,
+                    "file": str(filepath),
                     "extracted_data": {
                         "text_length": len(extracted_data["text"]),
                         "image_count": len(extracted_data["images_description"]),
@@ -237,7 +237,7 @@ class ContentExtractorAgent:
             result_data = {
                 "status": "success",
                 "data": knowledge_data,
-                "file": filepath,
+                "file": str(filepath),
                 "extracted_data": {
                     "text_length": len(extracted_data["text"]),
                     "image_count": len(extracted_data["images_description"]),
