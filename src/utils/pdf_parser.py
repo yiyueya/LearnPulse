@@ -116,7 +116,6 @@ class PDFParser:
             doc = fitz.open(pdf_path)
             total_pages = len(doc)
             analyzer = ImageValueAnalyzer(
-                page_occupation_threshold=0.7,
                 min_file_size_kb=15,
                 min_dimension=IMAGE_AI_MIN_SIZE
             )
@@ -300,7 +299,6 @@ class PDFParser:
             return result
 
         analyzer = ImageValueAnalyzer(
-            page_occupation_threshold=0.7,
             min_file_size_kb=15,
             min_dimension=IMAGE_AI_MIN_SIZE
         )
