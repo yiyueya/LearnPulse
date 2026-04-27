@@ -128,7 +128,7 @@ class AIService:
                             logger.info(f"重试中... ({attempt + 1}/{max_retries})")
                         else:
                             logger.error(f"提取知识点失败，已尝试 {max_retries} 次，所有尝试均未返回有效JSON")
-                            return ""
+                            return None
                 else:
                     logger.error(f"AI API调用失败: {response.status_code}, {response.text}")
                     if response.status_code == 529:
@@ -148,7 +148,7 @@ class AIService:
                     time.sleep(wait_time)
 
         logger.error(f"提取知识点失败，已尝试 {max_retries} 次")
-        return ""
+        return None
 
     def understand_image(self, image_path=None, image_url=None, prompt="描述这张图片的内容", max_retries=3):
         """使用MiniMax API理解图片内容"""
