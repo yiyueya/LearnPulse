@@ -3,9 +3,13 @@ import fitz  # PyMuPDF
 import pdfplumber
 import concurrent.futures
 from pathlib import Path
-from config.config import DATA_DIR, IMAGE_PROCESSING_ENABLED, MIN_IMAGE_SIZE
+from config.config import (
+    DATA_DIR, IMAGE_PROCESSING_ENABLED, MIN_IMAGE_SIZE,
+    IMAGE_SMART_FILTER, IMAGE_OCR_THRESHOLD, IMAGE_AI_MIN_SIZE
+)
 from src.utils.cache_manager import CacheManager
 from src.utils.logger import logger
+from src.utils.image_value_analyzer import ImageValueAnalyzer
 
 class PDFParser:
     """PDF解析工具，用于提取文本和图片"""
@@ -26,7 +30,6 @@ class PDFParser:
                 if file.suffix == ".pdf":
                     pdf_files.append(str(file))
 
-            # 按文件名排序
             pdf_files.sort()
             return pdf_files
         except Exception as e:
@@ -48,12 +51,11 @@ class PDFParser:
             return ""
     
     def extract_images(self, pdf_path):
-        """从 PDF 文件中提取图片（带过滤）"""
+        """从 PDF 文件中提取图片"""
         images = []
         try:
             doc = fitz.open(pdf_path)
             
-            # 定义每页提取图片的函数
             def extract_page_images(page_num):
                 page_images = []
                 page = doc[page_num]
@@ -65,7 +67,6 @@ class PDFParser:
                     image_bytes = base_image["image"]
                     image_ext = base_image["ext"]
                     
-                    # 过滤太小的图片（可能是图标、装饰等）
                     if MIN_IMAGE_SIZE > 0 and len(image_bytes) < MIN_IMAGE_SIZE:
                         continue
                     
@@ -78,13 +79,10 @@ class PDFParser:
                     })
                 return page_images
             
-            # 并行处理每页
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                # 提交所有页面的处理任务
                 future_to_page = {executor.submit(extract_page_images, page_num): page_num 
                                  for page_num in range(len(doc))}
                 
-                # 收集处理结果
                 for future in concurrent.futures.as_completed(future_to_page):
                     try:
                         page_images = future.result()
@@ -93,19 +91,17 @@ class PDFParser:
                         print(f"处理页面图片失败: {e}")
             
             doc.close()
-            
             return images
         except Exception as e:
             logger.error(f"提取图片错误：{e}")
             return []
-    
+
     def save_image_to_temp(self, img_data):
         """保存图片到临时文件"""
         try:
             temp_dir = Path.cwd() / "temp"
             temp_dir.mkdir(parents=True, exist_ok=True)
 
-            # 生成唯一的临时文件名
             temp_filename = f"temp_image_{img_data['page']}_{img_data['index']}.{img_data['ext']}"
             temp_path = temp_dir / temp_filename
 
@@ -117,27 +113,135 @@ class PDFParser:
             logger.error(f"保存临时图片错误: {e}")
             return None
 
-    def get_image_description(self, img_data, ai_service, prompt):
-        """获取图片描述，使用缓存（单张处理）"""
+    def extract_images_smart(self, pdf_path, ocr_callback=None):
+        """智能提取并分类图片
+        
+        Args:
+            pdf_path: PDF 文件路径
+            ocr_callback: 可选回调，用于C类图片的OCR结果 (ocr_text, page_num)
+            
+        Returns:
+            dict: {
+                "a_images": [...],  # 知识图示，需AI分析
+                "b_images": [...],  # 装饰插画，跳过
+                "c_images": [...],  # 文字/公式，OCR处理
+                "a_count": int,
+                "b_count": int, 
+                "c_count": int,
+                "total": int
+            }
+        """
+        if not IMAGE_SMART_FILTER:
+            # 智能过滤关闭时，返回所有图片为 A 类
+            images = self.extract_images(pdf_path)
+            return {
+                "a_images": [{"page": img["page"], "bytes": img["bytes"], 
+                              "ext": img["ext"], "index": img["index"], 
+                              "size": img["size"]} for img in images],
+                "b_images": [],
+                "c_images": [],
+                "a_count": len(images),
+                "b_count": 0,
+                "c_count": 0,
+                "total": len(images)
+            }
+        
+        images = self.extract_images(pdf_path)
+        if not images:
+            return {"a_images": [], "b_images": [], "c_images": [],
+                    "a_count": 0, "b_count": 0, "c_count": 0, "total": 0}
+
+        result = {"a_images": [], "b_images": [], "c_images": [],
+                  "a_count": 0, "b_count": 0, "c_count": 0, "total": len(images)}
+
         # 保存图片到临时文件
+        temp_data = []
+        for img_data in images:
+            temp_path = self.save_image_to_temp(img_data)
+            if temp_path:
+                temp_data.append({**img_data, "temp_path": temp_path})
+
+        if not temp_data:
+            return result
+
+        analyzer = ImageValueAnalyzer(
+            page_occupation_threshold=0.7,
+            min_file_size_kb=15,
+            min_dimension=IMAGE_AI_MIN_SIZE
+        )
+
+        for img in temp_data:
+            try:
+                analysis = analyzer.analyze(img["temp_path"])
+                value_class = analysis["value_class"]
+                
+                categorized = {
+                    "page": img["page"],
+                    "bytes": img["bytes"],
+                    "ext": img["ext"],
+                    "index": img["index"],
+                    "size": img["size"],
+                    "temp_path": img["temp_path"],
+                    "value_class": value_class,
+                    "reason": analysis.get("reason", ""),
+                    "width": analysis.get("width", 0),
+                    "height": analysis.get("height", 0),
+                    "file_size": analysis.get("file_size", 0),
+                    "aspect_ratio": analysis.get("aspect_ratio", 0)
+                }
+                
+                if value_class == "A":
+                    result["a_images"].append(categorized)
+                    result["a_count"] += 1
+                elif value_class == "B":
+                    result["b_images"].append(categorized)
+                    result["b_count"] += 1
+                    # B类直接清理临时文件
+                    Path(img["temp_path"]).unlink(missing_ok=True)
+                else:  # C 或 needs_ai_check
+                    result["c_images"].append(categorized)
+                    result["c_count"] += 1
+                    # C类做OCR
+                    if ocr_callback:
+                        try:
+                            from PIL import Image
+                            import pytesseract
+                            pil_img = Image.open(img["temp_path"])
+                            ocr_text = pytesseract.image_to_string(pil_img, lang="chi_sim+eng")
+                            if ocr_text.strip():
+                                ocr_callback(ocr_text.strip(), img["page"])
+                            pil_img.close()
+                        except Exception as e:
+                            logger.debug(f"OCR failed for page {img['page']}: {e}")
+                        finally:
+                            Path(img["temp_path"]).unlink(missing_ok=True)
+                    else:
+                        # 无callback也清理
+                        Path(img["temp_path"]).unlink(missing_ok=True)
+                        
+            except Exception as e:
+                logger.warning(f"Image analysis failed: {e}")
+
+        logger.info(f"图片分类结果: A类={result['a_count']}, B类={result['b_count']}, C类={result['c_count']}")
+        return result
+    
+    def get_image_description(self, img_data, ai_service, prompt):
+        """获取图片描述，使用缓存"""
         temp_path = self.save_image_to_temp(img_data)
         if not temp_path:
             return None
 
         try:
-            # 检查缓存
             cached_description = self.cache_manager.get_image_cache(temp_path)
             if cached_description:
                 logger.info(f"使用缓存的图片描述 (第{img_data['page']}页)")
                 return cached_description
 
-            # 调用 AI 服务获取描述
             description = ai_service.understand_image(
                 image_path=temp_path,
                 prompt=prompt
             )
 
-            # 缓存结果
             if description:
                 self.cache_manager.set_image_cache(temp_path, description)
 
@@ -146,7 +250,6 @@ class PDFParser:
             logger.error(f"获取图片描述错误：{e}")
             return None
         finally:
-            # 清理临时文件
             temp_path_obj = Path(temp_path)
             if temp_path_obj.exists():
                 try:
@@ -155,24 +258,13 @@ class PDFParser:
                     pass
     
     def get_images_descriptions_batch(self, images_data, ai_service, prompt, progress_callback=None):
-        """批量获取多张图片描述，使用缓存
-        
-        Args:
-            images_data: 图片数据列表
-            ai_service: AI 服务实例
-            prompt: 描述提示
-            progress_callback: 进度回调函数，签名为 (current, total, message) -> None
-            
-        Returns:
-            列表：[{page, description}]
-        """
+        """批量获取多张图片描述"""
         if not IMAGE_PROCESSING_ENABLED:
             print("图片理解功能已禁用")
             return []
         
         total_images = len(images_data)
         
-        # 保存所有图片到临时文件（并行）
         temp_paths = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             future_to_img = {executor.submit(self.save_image_to_temp, img_data): img_data 
@@ -191,7 +283,6 @@ class PDFParser:
             return []
         
         try:
-            # 检查缓存（并行）
             results = []
             uncached_paths = []
             
@@ -225,11 +316,9 @@ class PDFParser:
                     else:
                         uncached_paths.append((result["img_data"], result["temp_path"]))
             
-            # 批量处理未缓存的图片
             if uncached_paths:
                 print(f"需要处理 {len(uncached_paths)} 张未缓存的图片...")
                 
-                # 使用批量处理
                 uncached_path_list = [path for _, path in uncached_paths]
                 batch_results = ai_service.understand_images_batch(
                     image_paths=uncached_path_list,
@@ -237,15 +326,11 @@ class PDFParser:
                     progress_callback=progress_callback
                 )
                 
-                # 缓存结果（并行）
                 def cache_result(img_data_temp_path_description):
                     (img_data, temp_path), description = img_data_temp_path_description
                     if description:
                         self.cache_manager.set_image_cache(temp_path, description)
-                        return {
-                            "page": img_data["page"],
-                            "description": description
-                        }
+                        return {"page": img_data["page"], "description": description}
                     return None
                 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
@@ -262,7 +347,6 @@ class PDFParser:
             print(f"批量获取图片描述错误：{e}")
             return []
         finally:
-            # 清理临时文件（并行）
             def cleanup_temp(temp_path):
                 temp_path_obj = Path(temp_path)
                 if temp_path_obj.exists():

@@ -5,6 +5,7 @@ from src.services.ai_service import AIService
 from src.utils.text_splitter import TextSplitter
 from src.utils.cache_manager import CacheManager
 from src.utils.logger import logger
+from src.utils.quota_tracker import MiniMaxVLMError
 import json
 from pathlib import Path
 from config.config import JSON_DIR, IMAGE_PROCESSING_ENABLED, MAX_IMAGES_PER_PDF
@@ -115,12 +116,19 @@ class ContentExtractorAgent:
                     step_progress = 10 + (current / total) * 30
                     self._update_progress(message, self._calculate_step_progress(2, 4, step_progress))
 
-                images_description = self.pdf_parser.get_images_descriptions_batch(
-                    images,
-                    self.ai_service,
-                    "这是一张小学教材的图片。请描述图片中的内容，包括其中的文字、公式、图表等信息。如果是数学题目或知识点，请详细说明。如果是图表或插图，请描述其含义。",
-                    progress_callback=image_progress_callback
-                )
+                try:
+                    images_description = self.pdf_parser.get_images_descriptions_batch(
+                        images,
+                        self.ai_service,
+                        "这是一张小学教材的图片。请描述图片中的内容，包括其中的文字、公式、图表等信息。如果是数学题目或知识点，请详细说明。如果是图表或插图，请描述其含义。",
+                        progress_callback=image_progress_callback
+                    )
+                except MiniMaxVLMError as e:
+                    self._update_progress(f"图片额度耗尽，跳过图片理解: {e}", self._calculate_step_progress(2, 4, 40))
+                    images_description = []
+                    extracted_data["images_description"] = images_description
+                    self.cache_manager.set_process_cache(pdf_path, {"extracted_data": extracted_data})
+                    # 继续处理后续步骤，不因为额度问题中断整个PDF处理
 
                 self._check_cancel()
                 extracted_data["images_description"] = images_description
