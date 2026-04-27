@@ -60,6 +60,7 @@ class ContentExtractorAgent:
     def process_pdf(self, pdf_path, subject, grade):
         """处理PDF文档，提取知识点（包括图片内容）"""
         filename = Path(pdf_path).name
+        logger.debug(f"[ContentExtractor] Starting PDF processing: {filename}")
 
         self._check_cancel()
 
@@ -82,13 +83,16 @@ class ContentExtractorAgent:
 
         if not extracted_data.get("text"):
             self._update_progress(f"提取PDF文本: {filename}", self._calculate_step_progress(1, 4, 30))
+            logger.debug(f"[ContentExtractor] Extracting text from PDF: {filename}")
             text = self.pdf_parser.extract_text(pdf_path)
             if not text:
+                logger.error(f"[ContentExtractor] Text extraction failed: {filename}")
                 self._update_progress(f"PDF文本提取失败: {filename}", 0)
                 self.cache_manager.set_process_status(pdf_path, 'failed', error_message="PDF文本提取失败")
                 return {"status": "error", "message": "PDF文本提取失败"}
 
             extracted_data["text"] = text
+            logger.info(f"[ContentExtractor] Text extracted: {len(text)} chars from {filename}")
             self._update_progress(f"提取到 {len(text)} 字符的文本", self._calculate_step_progress(1, 4, 60))
             self.cache_manager.set_process_cache(pdf_path, {"extracted_data": extracted_data})
         
@@ -97,8 +101,10 @@ class ContentExtractorAgent:
         if not extracted_data.get("images_description"):
             self._check_cancel()
             self._update_progress(f"提取 PDF 图片：{filename}", self._calculate_step_progress(2, 4, 0))
+            logger.debug(f"[ContentExtractor] Starting image extraction from {filename}")
             images = self.pdf_parser.extract_images(pdf_path)
             image_count = len(images)
+            logger.info(f"[ContentExtractor] Found {image_count} images in {filename}")
 
             # 限制图片数量，防止内存溢出
             if image_count > MAX_IMAGES_PER_PDF:
@@ -124,6 +130,7 @@ class ContentExtractorAgent:
                         progress_callback=image_progress_callback
                     )
                 except MiniMaxVLMError as e:
+                    logger.warning(f"[ContentExtractor] Image quota exhausted, skipping image understanding: {e}")
                     self._update_progress(f"图片额度耗尽，跳过图片理解: {e}", self._calculate_step_progress(2, 4, 40))
                     images_description = []
                     extracted_data["images_description"] = images_description
@@ -150,6 +157,7 @@ class ContentExtractorAgent:
 
         self._check_cancel()
         self._update_progress(f"使用AI提取知识点: {filename}")
+        logger.debug(f"[ContentExtractor] Starting AI knowledge extraction for {filename}")
 
         # 检查内容长度，需要分片处理
         if len(combined_content) > 100000:  # 超过10万字符就分片
@@ -169,6 +177,7 @@ class ContentExtractorAgent:
                     self._update_progress(f"第 {i + 1} 个分片提取失败")
             
             if not results:
+                logger.error(f"[ContentExtractor] All chunks failed for {filename}")
                 self._update_progress(f"所有分片提取失败: {filename}")
                 self.cache_manager.set_process_status(pdf_path, 'failed', error_message="所有分片提取失败")
                 return {"status": "error", "message": "知识点提取失败", "extracted_data": extracted_data}
@@ -181,6 +190,7 @@ class ContentExtractorAgent:
             # 直接处理
             knowledge_json = self.ai_service.extract_knowledge(combined_content)
             if not knowledge_json:
+                logger.error(f"[ContentExtractor] Knowledge extraction failed for {filename}")
                 self._update_progress(f"知识点提取失败: {filename}")
                 self.cache_manager.set_process_status(pdf_path, 'failed', error_message="知识点提取失败")
                 return {"status": "error", "message": "知识点提取失败", "extracted_data": extracted_data}
@@ -241,8 +251,10 @@ class ContentExtractorAgent:
             self.cache_manager.set_process_status(pdf_path, 'completed', current_step=4, total_steps=4)
             
             self._update_progress(f"处理完成: {filename}")
+            logger.info(f"[ContentExtractor] PDF processed successfully: {filename} | text={len(extracted_data['text'])} chars, images={len(extracted_data['images_description'])}")
             return result_data
         except Exception as e:
+            logger.error(f"[ContentExtractor] Failed to save results for {filename}: {e}")
             self._update_progress(f"保存失败: {e}")
             self.cache_manager.set_process_status(pdf_path, 'failed', error_message=f"保存失败: {e}")
             return {"status": "error", "message": f"保存失败: {e}", "extracted_data": extracted_data}

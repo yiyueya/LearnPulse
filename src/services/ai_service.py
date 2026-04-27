@@ -194,12 +194,13 @@ class AIService:
         else:
             timer_key = "understand_image_url"
         logger.start_timer(timer_key)
+        logger.debug(f"[AIService] Starting image understanding: {image_path or image_url}")
 
         if image_path:
             cache_key = self._get_cache_key(image_path, prompt)
             cached_result = self._load_from_cache(cache_key)
             if cached_result:
-                logger.info(f"从缓存加载结果: {Path(image_path).name}")
+                logger.info(f"[AIService] Cache hit for image: {Path(image_path).name}")
                 logger.stop_timer(timer_key)
                 logger.log_performance(timer_key, "图片理解（缓存）")
                 return cached_result
@@ -284,7 +285,7 @@ class AIService:
                     import time
                     time.sleep(wait_time)
 
-        logger.error(f"图片理解失败，已尝试 {max_retries} 次")
+        logger.error(f"[AIService] Image understanding failed after {max_retries} retries: {image_path}")
         logger.stop_timer(timer_key)
         logger.log_performance(timer_key, "图片理解（失败）")
         return ""
@@ -308,7 +309,7 @@ class AIService:
 
         all_batches = self._create_size_based_batches(image_paths)
 
-        logger.info(f"批量处理 {total_images} 张图片，分为 {len(all_batches)} 个批次")
+        logger.info(f"[AIService] Batch processing {total_images} images in {len(all_batches)} batches")
 
         if progress_callback:
             progress_callback(0, total_images, f"准备处理 {total_images} 张图片...")

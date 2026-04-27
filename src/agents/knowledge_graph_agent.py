@@ -1,5 +1,6 @@
 # 知识图谱Agent
 from src.services.knowledge_graph import KnowledgeGraph
+from src.utils.logger import logger
 import json
 from pathlib import Path
 from config.config import JSON_DIR
@@ -93,15 +94,27 @@ class KnowledgeGraphAgent:
     
     def build_all_knowledge_maps(self):
         """构建所有学科的知识地图"""
+        logger.debug("[KnowledgeGraph] Building all knowledge maps")
         subjects = ["数学", "语文"]
-        return self.build_knowledge_maps(subjects)
+        result = self.build_knowledge_maps(subjects)
+        logger.info(f"[KnowledgeGraph] All knowledge maps built: {result}")
+        return result
 
     def build_knowledge_maps(self, subjects):
         """构建指定学科的知识地图"""
+        logger.debug(f"[KnowledgeGraph] Starting knowledge map build for subjects: {subjects}")
         results = {}
 
         for subject in subjects:
+            logger.debug(f"[KnowledgeGraph] Building knowledge map for subject: {subject}")
             result = self.build_knowledge_map(subject)
             results[subject] = result
+            try:
+                graph = self.knowledge_graph.graph
+                node_count = graph.number_of_nodes()
+                edge_count = graph.number_of_edges()
+                logger.info(f"[KnowledgeGraph] Knowledge map built for {subject}: {node_count} nodes, {edge_count} edges")
+            except Exception:
+                pass
 
         return results

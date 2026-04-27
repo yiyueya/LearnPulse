@@ -1,44 +1,17 @@
-2026-04-27 15:27:25 | INFO     | 应用启动中...
-INFO:     Started server process [9076]
+2026-04-27 16:08:52 | INFO     | 应用启动中...
+INFO:     Started server process [9863]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-2026-04-27 15:27:27 | INFO     | 健康检查请求
-INFO:     127.0.0.1:46036 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65309 - "GET / HTTP/1.1" 200 OK
-2026-04-27 15:30:02 | INFO     | 健康检查请求
-INFO:     127.0.0.1:50082 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59234 - "GET /get_pending_files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59234 - "POST /process_selected_files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59234 - "GET /process_pdfs_stream HTTP/1.1" 200 OK
-2026-04-27 15:30:22 | INFO     | 批量处理 50 张图片，分为 1 个批次
-2026-04-27 15:30:22 | INFO     | 从缓存加载批次结果: 50 张图片
-2026-04-27 15:30:22 | INFO     | 批量处理 50 张图片 耗时: 0.00秒
-2026-04-27 15:31:40 | INFO     | 获取知识地图: 数学
-2026-04-27 15:31:40 | INFO     | 知识地图获取成功: 0个节点, 0条边
-需要处理 50 张未缓存的图片...
-
-基于大小分组：50 张图片 → 1 个批次
-  批次 1: 50 张图片, 估算大小: 2.13MB
-INFO:     127.0.0.1:59234 - "GET /get_knowledge_map/%E6%95%B0%E5%AD%A6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59234 - "GET /get_pending_files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58453 - "GET /get_pending_files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58453 - "GET /get_pending_files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58453 - "GET /get_pending_files HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58453 - "OPTIONS /generate_test HTTP/1.1" 200 OK
-2026-04-27 15:32:13 | INFO     | 生成诊断测试: 学科=数学, 年级=一年级, 题型=mixed
-INFO:     127.0.0.1:55286 - "POST /generate_test HTTP/1.1" 200 OK
-2026-04-27 15:32:22 | INFO     | 获取知识地图: 数学
-2026-04-27 15:32:22 | INFO     | 知识地图获取成功: 0个节点, 0条边
-INFO:     127.0.0.1:53820 - "GET /get_knowledge_map/%E6%95%B0%E5%AD%A6 HTTP/1.1" 200 OK
-2026-04-27 15:32:24 | INFO     | 获取知识地图: 语文
-2026-04-27 15:32:24 | INFO     | 知识地图获取成功: 17个节点, 16条边
-INFO:     127.0.0.1:53820 - "GET /get_knowledge_map/%E8%AF%AD%E6%96%87 HTTP/1.1" 200 OK
-2026-04-27 15:32:29 | INFO     | 获取知识地图: 数学
-2026-04-27 15:32:29 | INFO     | 知识地图获取成功: 0个节点, 0条边
-INFO:     127.0.0.1:53820 - "GET /get_knowledge_map/%E6%95%B0%E5%AD%A6 HTTP/1.1" 200 OK
-2026-04-27 15:32:34 | INFO     | 获取知识地图: 语文
-2026-04-27 15:32:34 | INFO     | 知识地图获取成功: 17个节点, 16条边
-INFO:     127.0.0.1:62410 - "GET /get_knowledge_map/%E8%AF%AD%E6%96%87 HTTP/1.1" 200 OK
-2026-04-27 15:33:12 | INFO     | 生成诊断测试: 学科=语文, 年级=一年级, 题型=mixed
-INFO:     127.0.0.1:61535 - "POST /generate_test HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44642 - "GET /get_pending_files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44694 - "GET /get_pending_files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55818 - "GET / HTTP/1.1" 200 OK
+2026-04-27 16:10:05 | INFO     | 健康检查请求
+INFO:     127.0.0.1:57173 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61416 - "GET /get_pending_files HTTP/1.1" 200 OK
+2026-04-27 16:10:08 | INFO     | 获取知识地图: 语文
+2026-04-27 16:10:08 | INFO     | 知识地图获取成功: 0个节点, 0条边
+INFO:     127.0.0.1:61416 - "GET /get_knowledge_map/%E8%AF%AD%E6%96%87 HTTP/1.1" 200 OK
+2026-04-27 16:10:10 | INFO     | 获取知识地图: 数学
+2026-04-27 16:10:10 | INFO     | 知识地图获取成功: 0个节点, 0条边
+INFO:     127.0.0.1:61416 - "GET /get_knowledge_map/%E6%95%B0%E5%AD%A6 HTTP/1.1" 200 OK

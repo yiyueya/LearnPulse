@@ -12,6 +12,7 @@ from src.agents.question_generator_agent import QuestionGeneratorAgent
 from src.agents.answer_evaluator_agent import AnswerEvaluatorAgent
 from src.agents.analysis_agent import AnalysisAgent
 from src.services.learning_history import LearningHistoryManager
+from src.utils.logger import logger
 
 class AgentCoordinator:
     """Agent调度中心，协调各个Agent的工作"""
@@ -61,6 +62,7 @@ class AgentCoordinator:
     
     def process_pdf_documents(self):
         """处理PDF文档并构建知识地图"""
+        logger.debug("[Coordinator] Starting PDF document processing")
         self.reset_cancel()
         self.content_extractor.set_cancel_check(self.check_cancel)
         results = {}
@@ -76,24 +78,29 @@ class AgentCoordinator:
                 return {"status": "cancelled", "message": "用户取消了处理"}
 
             results["extraction_results"] = extraction_results
+            logger.info("[Coordinator] PDF extraction complete")
             self.check_cancel()
 
             self._update_progress("开始构建知识地图")
+            logger.debug("[Coordinator] Starting knowledge map build")
             knowledge_map_future = executor.submit(self.knowledge_graph.build_all_knowledge_maps)
 
             try:
                 knowledge_map_results = knowledge_map_future.result()
             except CancellationRequested:
+                logger.warning("[Coordinator] Processing cancelled by user")
                 self._update_progress("处理已取消")
                 return {"status": "cancelled", "message": "用户取消了处理"}
 
             self._update_progress("知识地图构建完成")
+            logger.info("[Coordinator] Knowledge map build complete")
             results["knowledge_map_results"] = knowledge_map_results
 
         return results
 
     def process_selected_documents(self, selected_files):
         """处理选定的PDF文档并构建知识地图"""
+        logger.debug(f"[Coordinator] Starting selected document processing: {len(selected_files)} files")
         self.reset_cancel()
         self.content_extractor.set_cancel_check(self.check_cancel)
         results = {}
@@ -109,10 +116,10 @@ class AgentCoordinator:
                 return {"status": "cancelled", "message": "用户取消了处理"}
 
             results["extraction_results"] = extraction_results
+            logger.info("[Coordinator] Selected files extraction complete")
             self.check_cancel()
 
             self._update_progress("开始构建知识地图")
-            # Extract unique subjects from selected_files to build only needed subjects
             selected_subjects = list(set(f.get("subject") for f in selected_files if f.get("subject")))
             if selected_subjects:
                 knowledge_map_future = executor.submit(self.knowledge_graph.build_knowledge_maps, selected_subjects)
@@ -122,10 +129,12 @@ class AgentCoordinator:
             try:
                 knowledge_map_results = knowledge_map_future.result()
             except CancellationRequested:
+                logger.warning("[Coordinator] Processing cancelled by user")
                 self._update_progress("处理已取消")
                 return {"status": "cancelled", "message": "用户取消了处理"}
 
             self._update_progress("知识地图构建完成")
+            logger.info("[Coordinator] Selected documents processing complete")
             results["knowledge_map_results"] = knowledge_map_results
 
         return results
