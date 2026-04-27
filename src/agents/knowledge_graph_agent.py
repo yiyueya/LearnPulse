@@ -54,10 +54,14 @@ class KnowledgeGraphAgent:
     def build_all_knowledge_maps(self):
         """构建所有学科的知识地图"""
         subjects = ["数学", "语文"]
+        return self.build_knowledge_maps(subjects)
+
+    def build_knowledge_maps(self, subjects):
+        """构建指定学科的知识地图"""
         results = {}
-        
+
         for subject in subjects:
             result = self.build_knowledge_map(subject)
             results[subject] = result
-        
+
         return results
