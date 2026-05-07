@@ -34,11 +34,21 @@ class QuestionGeneratorAgent:
             return {"status": "error", "message": "题目生成失败"}
 
         try:
-            # 尝试解析AI返回的JSON
-            questions = json.loads(questions_json)
+            # 尝试解析AI返回的JSON（可能带有markdown包裹）
+            content = questions_json.strip()
+            # 去除markdown代码块包裹
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+
+            questions = json.loads(content)
             return {"status": "success", "questions": questions}
-        except json.JSONDecodeError:
-            return {"status": "warning", "message": "AI返回的不是有效JSON", "content": questions_json}
+        except json.JSONDecodeError as e:
+            return {"status": "error", "message": f"JSON解析失败: {str(e)}", "content": questions_json}
 
     def generate_diagnostic_test(self, subject, grade, question_type="mixed", question_count=15):
         """生成诊断测试题目"""

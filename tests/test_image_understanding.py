@@ -1,6 +1,6 @@
 # 测试PDF图片提取和MiniMax图片理解
 import sys
-sys.path.insert(0, "d:/code/AILearning")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.utils.pdf_parser import PDFParser
 from src.services.ai_service import AIService

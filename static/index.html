@@ -470,17 +470,12 @@
         </div>
         
         <div class="card">
-            <h2>1. 选择PDF文档</h2>
-            <p>选择要处理的PDF文档，系统会提取知识点并构建知识地图</p>
-            <button class="btn btn-secondary" onclick="loadPendingFiles()">刷新文件列表</button>
-            <button class="btn" onclick="processSelectedFiles()" id="processSelectedBtn" disabled>处理选定文件</button>
-            <button class="btn" onclick="processAllFiles()">处理所有文件</button>
-            
-            <div id="fileList" class="file-list"></div>
-            
-            <div class="loading" id="fileLoading">
-                <div class="spinner"></div>
-                <p>正在加载文件列表，请稍候...</p>
+            <h2>1. 上传PDF文档</h2>
+            <p>上传PDF教材，系统自动识别学科并构建知识地图</p>
+            <div class="form-group">
+                <input type="file" id="pdfUpload" accept=".pdf" multiple onchange="handlePdfUpload(this.files)" style="display:none;">
+                <button class="btn" onclick="document.getElementById('pdfUpload').click()">选择PDF文件上传</button>
+                <span id="uploadFileNames" style="margin-left:10px;color:#666;"></span>
             </div>
         </div>
         
@@ -564,18 +559,17 @@
 
     <script>
         const API_BASE = 'http://localhost:8000';
-        let pendingFiles = [];
-        const SELECTED_FILES_KEY = 'selected_pdf_files';
         const PROCESSING_STATUS_KEY = 'processing_status';
         let eventSource = null;
-        
+        let uploadedFiles = [];
+
         function showStatus(message, isError = false) {
             const status = document.getElementById('status');
             status.textContent = message;
             status.className = `status ${isError ? 'error' : 'success'}`;
             status.style.display = 'block';
         }
-        
+
         async function checkHealth() {
             try {
                 const response = await fetch(`${API_BASE}/health`);
@@ -585,130 +579,74 @@
                 showStatus('服务连接失败，请确保服务已启动', true);
             }
         }
-        
-        function saveSelectedFiles() {
-            const selectedFiles = getSelectedFiles();
-            localStorage.setItem(SELECTED_FILES_KEY, JSON.stringify(selectedFiles));
-        }
-        
-        function loadSelectedFiles() {
-            const saved = localStorage.getItem(SELECTED_FILES_KEY);
-            if (saved) {
-                try {
-                    return JSON.parse(saved);
-                } catch (e) {
-                    return [];
-                }
-            }
-            return [];
-        }
-        
+
         function saveProcessingStatus(status) {
             localStorage.setItem(PROCESSING_STATUS_KEY, JSON.stringify(status));
         }
-        
-        function loadProcessingStatus() {
-            const saved = localStorage.getItem(PROCESSING_STATUS_KEY);
-            if (saved) {
-                try {
-                    return JSON.parse(saved);
-                } catch (e) {
-                    return null;
-                }
-            }
-            return null;
-        }
-        
+
         function clearProcessingStatus() {
             localStorage.removeItem(PROCESSING_STATUS_KEY);
         }
-        
-        async function loadPendingFiles() {
-            const fileList = document.getElementById('fileList');
-            const fileLoading = document.getElementById('fileLoading');
-            const processSelectedBtn = document.getElementById('processSelectedBtn');
-            
-            fileLoading.classList.add('show');
-            fileList.innerHTML = '';
-            processSelectedBtn.disabled = true;
-            
-            try {
-                const response = await fetch(`${API_BASE}/get_pending_files`);
-                const data = await response.json();
-                
-                if (data.status === 'success') {
-                    pendingFiles = data.files;
-                    const savedSelectedFiles = loadSelectedFiles();
-                    const savedSelectedPaths = savedSelectedFiles.map(f => f.path);
-                    
-                    if (pendingFiles.length > 0) {
-                        pendingFiles.forEach((file, index) => {
-                            const isSelected = savedSelectedPaths.includes(file.path);
-                            const fileItem = document.createElement('div');
-                            fileItem.className = 'file-item';
-                            fileItem.innerHTML = `
-                                <input type="checkbox" id="file-${index}" value="${index}" ${isSelected ? 'checked' : ''} onchange="updateSelectButton(); saveSelectedFiles()">
-                                <div class="file-info">
-                                    <div class="filename">${file.filename}</div>
-                                    <div class="file-details">学科: ${file.subject}, 年级: ${file.grade}</div>
-                                </div>
-                            `;
-                            fileList.appendChild(fileItem);
-                        });
-                    } else {
-                        fileList.innerHTML = `
-                            <div class="no-files">
-                                <p>没有需要处理的文件</p>
-                                <p>所有PDF文件都已处理过，或data目录下没有PDF文件</p>
-                            </div>
-                        `;
-                    }
-                } else {
-                    fileList.innerHTML = `
-                        <div class="no-files">
-                            <p>加载文件失败: ${data.message}</p>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                fileList.innerHTML = `
-                    <div class="no-files">
-                        <p>加载文件失败: ${error.message}</p>
-                    </div>
-                `;
-            } finally {
-                fileLoading.classList.remove('show');
-                updateSelectButton();
-            }
+
+        function handlePdfUpload(files) {
+            if (!files || files.length === 0) return;
+
+            const fileNames = Array.from(files).map(f => f.name).join(', ');
+            document.getElementById('uploadFileNames').textContent = `已选择 ${files.length} 个文件`;
+
+            uploadedFiles = Array.from(files);
+            showStatus(`已选择 ${files.length} 个PDF文件，正在上传...`);
+
+            // 直接开始上传
+            processSelectedFiles();
         }
-        
-        function updateSelectButton() {
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
-            const processSelectedBtn = document.getElementById('processSelectedBtn');
-            processSelectedBtn.disabled = checkedCount === 0;
-        }
-        
-        function getSelectedFiles() {
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            const selectedIndices = Array.from(checkboxes)
-                .filter(cb => cb.checked)
-                .map(cb => parseInt(cb.value));
-            return selectedIndices.map(index => pendingFiles[index]);
-        }
-        
+
         async function processSelectedFiles() {
-            const selectedFiles = getSelectedFiles();
-            if (selectedFiles.length === 0) {
-                showStatus('请先选择要处理的文件', true);
+            // 上传文件并处理
+            if (!uploadedFiles || uploadedFiles.length === 0) {
+                showStatus('请先选择PDF文件', true);
                 return;
             }
-            
-            startProcessing(selectedFiles);
-        }
-        
-        async function processAllFiles() {
-            startProcessing();
+
+            showStatus(`正在上传 ${uploadedFiles.length} 个文件...`);
+            const uploadPromises = uploadedFiles.map(async (file) => {
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const response = await fetch(`${API_BASE}/upload_pdf`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json();
+                    // 自动识别学科：文件名包含"语文"为语文，否则为数学
+                    const subject = file.name.includes('语文') ? '语文' : '数学';
+                    // 自动识别年级：根据文件名中的"上册/下册"或"一年级/二年级"
+                    let grade = '一年级';
+                    if (file.name.includes('二年级')) grade = '二年级';
+                    else if (file.name.includes('下册')) grade = '一年级'; // 默认为一年级下册
+                    return {
+                        filename: file.name,
+                        subject: subject,
+                        grade: grade,
+                        path: result.path
+                    };
+                } catch (e) {
+                    console.error('上传失败:', e);
+                    return null;
+                }
+            });
+
+            const uploadedResults = await Promise.all(uploadPromises);
+            const validFiles = uploadedResults.filter(r => r !== null);
+
+            if (validFiles.length > 0) {
+                startProcessing(validFiles);
+            } else {
+                showStatus('文件上传失败', true);
+            }
+
+            uploadedFiles = [];
+            document.getElementById('uploadFileNames').textContent = '';
         }
 
         async function stopProcessing() {
@@ -851,10 +789,7 @@
                         
                         // 处理完成后自动加载知识地图
                         loadKnowledgeMap();
-                        
-                        // 重新加载文件列表
-                        loadPendingFiles();
-                        
+
                         // 清除处理状态
                         clearProcessingStatus();
                         
@@ -897,143 +832,7 @@
                 loading.classList.remove('show');
             }
         }
-        
-        function restoreProcessingStatus() {
-            const savedStatus = loadProcessingStatus();
-            if (savedStatus && savedStatus.isProcessing) {
-                const progress = document.getElementById('pdfProgress');
-                const progressFill = document.getElementById('pdfProgressFill');
-                const progressMessage = document.getElementById('pdfProgressMessage');
-                const progressLog = document.getElementById('pdfProgressLog');
-                const loading = document.getElementById('pdfLoading');
-                
-                // 显示进度条
-                progress.classList.add('show');
-                loading.classList.add('show');
-                
-                // 恢复进度
-                progressFill.style.width = `${savedStatus.progress}%`;
-                progressMessage.textContent = savedStatus.message;
-                
-                // 恢复日志
-                if (savedStatus.log && Array.isArray(savedStatus.log)) {
-                    progressLog.innerHTML = '';
-                    savedStatus.log.forEach(message => {
-                        const logEntry = document.createElement('div');
-                        logEntry.textContent = message;
-                        progressLog.appendChild(logEntry);
-                    });
-                    progressLog.scrollTop = progressLog.scrollHeight;
-                }
-                
-                // 重新连接SSE
-                if (!eventSource) {
-                    eventSource = new EventSource(`${API_BASE}/process_pdfs_stream`);
-                    
-                    eventSource.onmessage = function(event) {
-                        const data = JSON.parse(event.data);
-                        
-                        // 更新进度条
-                        if (data.progress !== undefined) {
-                            progressFill.style.width = `${data.progress}%`;
-                        }
-                        
-                        // 更新消息
-                        if (data.message) {
-                            progressMessage.textContent = data.message;
-                            
-                            // 添加到日志
-                            const logEntry = document.createElement('div');
-                            logEntry.textContent = data.message;
-                            progressLog.appendChild(logEntry);
-                            // 自动滚动到底部
-                            progressLog.scrollTop = progressLog.scrollHeight;
-                        }
-                        
-                        // 保存处理状态
-                        saveProcessingStatus({
-                            isProcessing: data.is_processing,
-                            progress: data.progress || 0,
-                            message: data.message || progressMessage.textContent,
-                            log: Array.from(progressLog.children).map(child => child.textContent)
-                        });
-                        
-                        // 如果处理完成，显示结果
-                        if (!data.is_processing && data.result) {
-                            eventSource.close();
-                            eventSource = null;
-                            
-                            // 完成进度
-                            progressFill.style.width = '100%';
-                            progressMessage.textContent = '处理完成！';
-                            
-                            // 显示结果
-                            let resultHtml = '<h3>处理结果</h3>';
-                            
-                            if (data.result && data.result.extraction_results) {
-                                const extractionResults = data.result.extraction_results;
-                                let successCount = 0;
-                                let errorCount = 0;
-                                
-                                resultHtml += '<div style="margin-bottom: 20px;"><strong>汇总:</strong><br>';
-                                
-                                for (const [subject, files] of Object.entries(extractionResults)) {
-                                    for (const [filename, fileResult] of Object.entries(files)) {
-                                        if (fileResult.status === 'success') {
-                                            successCount++;
-                                        } else {
-                                            errorCount++;
-                                        }
-                                    }
-                                }
-                                
-                                resultHtml += `成功: ${successCount} 个文件, 失败: ${errorCount} 个文件</div>`;
-                                resultHtml += '<div style="margin-top: 20px;"><strong>详细信息:</strong><br>';
-                                resultHtml += '<pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;">';
-                                resultHtml += JSON.stringify(data.result, null, 2);
-                                resultHtml += '</pre></div>';
-                            } else {
-                                resultHtml += `<pre>${JSON.stringify(data.result, null, 2)}</pre>`;
-                            }
-                            
-                            const result = document.getElementById('pdfResult');
-                            result.innerHTML = resultHtml;
-                            result.classList.add('show');
-                            
-                            // 处理完成后自动加载知识地图
-                            loadKnowledgeMap();
-                            
-                            // 重新加载文件列表
-                            loadPendingFiles();
-                            
-                            // 清除处理状态
-                            clearProcessingStatus();
-                            
-                            loading.classList.remove('show');
-                        }
-                    };
-                    
-                    eventSource.onerror = function(event) {
-                        console.error('SSE错误:', event);
-                        if (eventSource) {
-                            eventSource.close();
-                            eventSource = null;
-                        }
-                        
-                        progressMessage.textContent = '处理失败';
-                        const result = document.getElementById('pdfResult');
-                        result.innerHTML = `<h3>错误</h3><p>连接服务器失败</p>`;
-                        result.classList.add('show');
-                        
-                        // 清除处理状态
-                        clearProcessingStatus();
-                        
-                        loading.classList.remove('show');
-                    };
-                }
-            }
-        }
-        
+
         async function generateTest() {
             const loading = document.getElementById('testLoading');
             const result = document.getElementById('testResult');
@@ -1044,19 +843,24 @@
             result.classList.remove('show');
             
             try {
-                const response = await fetch(`${API_BASE}/generate_test`, {
+                const response = await fetch(`${API_BASE}/generate_test_pdf`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ subject, grade })
+                    body: JSON.stringify({ subject, grade, question_count: 10 })
                 });
-                const data = await response.json();
-                
-                result.innerHTML = `
-                    <h3>测试题目</h3>
-                    <pre>${JSON.stringify(data, null, 2)}</pre>
-                `;
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'test_paper.pdf';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                result.innerHTML = `<h3>PDF下载成功</h3><p>题目PDF已下载，请查看下载文件夹</p>`;
                 result.classList.add('show');
             } catch (error) {
                 result.innerHTML = `<h3>错误</h3><p>${error.message}</p>`;
@@ -1123,7 +927,7 @@
                     const nodes = new vis.DataSet(nodesData);
                     const edges = new vis.DataSet(edgesData);
                     
-                    // 配置选项
+                    // 配置选项 - 使用分层布局避免死循环
                     const options = {
                         nodes: {
                             shape: 'box',
@@ -1141,18 +945,23 @@
                             }
                         },
                         edges: {
-                            width: 2,
-                            color: '#888',
-                            font: {
-                                size: 10
+                            width: 1,
+                            color: '#aaa',
+                            smooth: {
+                                type: 'continuous'
+                            }
+                        },
+                        layout: {
+                            hierarchical: {
+                                enabled: true,
+                                direction: 'UD',
+                                sortMethod: 'directed',
+                                levelSeparation: 80,
+                                nodeSpacing: 100
                             }
                         },
                         physics: {
-                            enabled: true,
-                            stabilization: {
-                                enabled: true,
-                                iterations: 1000
-                            }
+                            enabled: false
                         },
                         interaction: {
                             hover: true,
@@ -1194,11 +1003,9 @@
             }
         }
         
-        // 页面加载时自动加载文件列表和恢复处理状态
+        // 页面加载时检查服务状态
         window.onload = function() {
             checkHealth();
-            loadPendingFiles();
-            restoreProcessingStatus();
         };
         
         // 页面关闭时清理资源

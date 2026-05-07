@@ -589,40 +589,60 @@ class AIService:
 
     def generate_questions(self, knowledge_points, subject, grade, question_type="mixed", question_count=10):
         """基于知识点生成题目"""
-        try:
-            url = f"{self.api_url}/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                url = f"{self.api_url}/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                }
 
-            type_map = {
-                "mixed": "选择题、填空题、判断题",
-                "choice": "选择题",
-                "fill": "填空题",
-                "judge": "判断题",
-            }
-            type_desc = type_map.get(question_type, "选择题、填空题、判断题")
+                type_map = {
+                    "mixed": "选择题、填空题、判断题",
+                    "choice": "选择题",
+                    "fill": "填空题",
+                    "judge": "判断题",
+                }
+                type_desc = type_map.get(question_type, "选择题、填空题、判断题")
 
-            payload = {
-                "model": "MiniMax-M2.7",
-                "messages": [
-                    {"role": "system", "content": "你是一个教育专家，擅长根据知识点生成题目。"},
-                    {"role": "user", "content": f"基于以下知识点为{grade}年级{subject}学科生成{question_count}道{type_desc}，返回JSON格式数组:\n{knowledge_points}"}
-                ]
-            }
+                system_prompt = """你是一个教育专家，擅长根据知识点生成题目。
+【重要】只返回纯JSON数组，不要包含任何markdown标记或思考过程。
+直接返回JSON数组格式，例如：[{"type":"选择题","question":"...","options":["A","B","C"],"answer":"A"}]"""
 
-            response = requests.post(url, headers=headers, json=payload, timeout=120)
+                payload = {
+                    "model": "MiniMax-M2.7",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": f"基于以下知识点为{grade}年级{subject}学科生成{question_count}道{type_desc}，返回JSON格式数组:\n{knowledge_points}"}
+                    ]
+                }
 
-            if response.status_code == 200:
-                result = response.json()
-                return result["choices"][0]["message"]["content"]
-            else:
-                logger.error(f"AI API调用失败: {response.status_code}, {response.text}")
-                return ""
-        except Exception as e:
-            print(f"AI生成题目错误: {e}")
-            return ""
+                response = requests.post(url, headers=headers, json=payload, timeout=120)
+
+                if response.status_code == 200:
+                    result = response.json()
+                    raw_content = result["choices"][0]["message"]["content"]
+                    parsed = self._extract_json_from_response(raw_content)
+                    if parsed is not None:
+                        return json.dumps(parsed, ensure_ascii=False)
+                    else:
+                        logger.warning(f"第 {attempt + 1} 次尝试：生成题目失败，AI返回的不是有效JSON")
+                        if attempt < max_retries - 1:
+                            logger.info(f"重试中... ({attempt + 1}/{max_retries})")
+                else:
+                    logger.error(f"AI API调用失败: {response.status_code}, {response.text}")
+                    if attempt < max_retries - 1:
+                        import time
+                        time.sleep(2 ** attempt)
+            except Exception as e:
+                logger.error(f"AI生成题目错误: {e}")
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(2 ** attempt)
+
+        logger.error("生成题目失败，已尝试3次")
+        return ""
 
     def evaluate_answer(self, question, answer):
         """评估答案正确性"""

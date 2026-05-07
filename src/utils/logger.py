@@ -54,9 +54,12 @@ class Logger:
         """记录警告日志"""
         self.logger.warning(message)
 
-    def error(self, message):
+    def error(self, message, exc_info=False):
         """记录错误日志"""
-        self.logger.error(message)
+        if exc_info:
+            self.logger.exception(message)
+        else:
+            self.logger.error(message)
 
     def start_timer(self, key):
         """开始计时"""

@@ -1,5 +1,5 @@
 # 主应用文件
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
@@ -7,9 +7,13 @@ from pydantic import BaseModel, field_validator
 from config.config import HOST, PORT, MINIMAX_API_KEY
 from src.agents.agent_coordinator import AgentCoordinator
 from src.utils.logger import logger
+from src.utils.pdf_generator import generate_questions_pdf, generate_answer_sheet_pdf
 import asyncio
 import json
 from typing import AsyncGenerator, List, Dict, Optional
+from pathlib import Path
+import shutil
+import os
 
 logger.info("应用启动中...")
 
@@ -71,7 +75,7 @@ async def processing_error_handler(request: Request, exc: ProcessingError):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    logger.error(f"未处理的异常: {str(exc)}", exc_info=True)
+    logger.error(f"未处理的异常: {str(exc)}")
     return JSONResponse(
         status_code=500,
         content={
@@ -249,6 +253,29 @@ def get_pending_files():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# 上传PDF文件
+@app.post("/upload_pdf")
+async def upload_pdf(file: UploadFile = File(...)):
+    try:
+        upload_dir = Path("data/pdfs")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        # 保存文件
+        file_path = upload_dir / file.filename
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        logger.info(f"上传PDF文件: {file.filename}")
+
+        return {
+            "status": "success",
+            "message": f"文件 {file.filename} 上传成功",
+            "path": str(file_path)
+        }
+    except Exception as e:
+        logger.error(f"上传PDF失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # 获取文件处理状态
 @app.get("/get_file_status/{file_path:path}")
 def get_file_status(file_path: str):
@@ -344,6 +371,89 @@ def generate_test(request: TestRequest):
         logger.error(f"生成测试失败: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+# 生成题目PDF下载
+class TestPDFRequest(BaseModel):
+    subject: str
+    grade: str
+    question_type: str = "mixed"
+    question_count: int = 10
+
+@app.post("/generate_test_pdf")
+def generate_test_pdf(request: TestPDFRequest):
+    """生成题目PDF并返回下载"""
+    try:
+        logger.info(f"生成PDF测试卷: 学科={request.subject}, 年级={request.grade}")
+        result = coordinator.generate_diagnostic_test(
+            request.subject,
+            request.grade,
+            question_type=request.question_type,
+            question_count=request.question_count
+        )
+
+        if result["status"] != "success":
+            return result
+
+        questions = result.get("questions", [])
+        pdf_buffer = generate_questions_pdf(
+            questions,
+            request.subject,
+            request.grade,
+            title=f"Diagnostic Test - Grade {request.grade}"
+        )
+
+        filename = f"test_{request.subject[:1]}_{request.grade[:1]}_{request.question_count}t.pdf"
+
+        from urllib.parse import quote
+        encoded_filename = quote(filename)
+        return StreamingResponse(
+            iter([pdf_buffer.getvalue()]),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+            }
+        )
+    except Exception as e:
+        logger.error(f"生成PDF失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/generate_answer_pdf")
+def generate_answer_pdf(request: TestPDFRequest):
+    """生成答案卷PDF并返回下载"""
+    try:
+        logger.info(f"生成PDF答案卷: 学科={request.subject}, 年级={request.grade}")
+        result = coordinator.generate_diagnostic_test(
+            request.subject,
+            request.grade,
+            question_type=request.question_type,
+            question_count=request.question_count
+        )
+
+        if result["status"] != "success":
+            return result
+
+        questions = result.get("questions", [])
+        pdf_buffer = generate_answer_sheet_pdf(
+            questions,
+            request.subject,
+            request.grade,
+            title=f"Answer Sheet - Grade {request.grade}"
+        )
+
+        filename = f"answer_{request.subject[:1]}_{request.grade[:1]}_{request.question_count}t.pdf"
+
+        from urllib.parse import quote
+        encoded_filename = quote(filename)
+        return StreamingResponse(
+            iter([pdf_buffer.getvalue()]),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+            }
+        )
+    except Exception as e:
+        logger.error(f"生成答案PDF失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # 评估测试
 class EvaluationRequest(BaseModel):
     test_questions: list
@@ -425,44 +535,46 @@ def generate_weak_point_practice(request: WeakPointPracticeRequest):
 
 # 获取知识地图
 @app.get("/get_knowledge_map/{subject}")
-def get_knowledge_map(subject: str):
+def get_knowledge_map(subject: str, grade: str = None, unit: str = None):
     try:
-        logger.info(f"获取知识地图: {subject}")
-        
+        logger.info(f"获取知识地图: {subject}, grade={grade}, unit={unit}")
+
         if subject not in ['语文', '数学']:
             raise HTTPException(status_code=400, detail="学科必须是'语文'或'数学'")
-        
-        from src.services.knowledge_graph import KnowledgeGraph
-        kg = KnowledgeGraph()
-        kg.load_graph(f"{subject}_knowledge_map.json")
-        
-        # 构建返回数据
-        nodes = []
-        edges = []
-        
-        for node in kg.graph.nodes:
-            node_data = kg.graph.nodes[node]
-            nodes.append({
-                "id": node,
-                "label": node_data.get("name", ""),
-                "subject": node_data.get("subject", ""),
-                "grade": node_data.get("grade", ""),
-                "content": node_data.get("content", "")
-            })
-        
-        for edge in kg.graph.edges:
-            edges.append({
-                "from": edge[0],
-                "to": edge[1],
-                "label": kg.graph.edges[edge].get("relation", "关联")
-            })
-        
-        logger.info(f"知识地图获取成功: {len(nodes)}个节点, {len(edges)}条边")
-        return {"status": "success", "nodes": nodes, "edges": edges}
+
+        from src.agents.knowledge_graph_agent import KnowledgeGraphAgent
+        agent = KnowledgeGraphAgent()
+        data = agent.get_knowledge_map_data(subject, grade=grade, unit=unit)
+
+        logger.info(f"知识地图获取成功: {len(data.get('nodes', []))}个节点, {len(data.get('edges', []))}条边")
+        return {"status": "success", "nodes": data.get('nodes', []), "edges": data.get('edges', [])}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"获取知识地图失败: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 重建知识地图
+@app.post("/rebuild_knowledge_map/{subject}")
+def rebuild_knowledge_map(subject: str):
+    try:
+        logger.info(f"重建知识地图: {subject}")
+
+        if subject not in ['语文', '数学']:
+            raise HTTPException(status_code=400, detail="学科必须是'语文'或'数学'")
+
+        from src.agents.knowledge_graph_agent import KnowledgeGraphAgent
+        agent = KnowledgeGraphAgent()
+        result = agent.build_knowledge_map(subject)
+
+        if result.get("status") == "success":
+            return {"status": "success", "message": f"{subject}知识地图重建完成"}
+        else:
+            raise HTTPException(status_code=500, detail=result.get("message", "重建失败"))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"重建知识地图失败: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # 获取学习历史
@@ -497,6 +609,45 @@ def get_weak_point_trends(request: WeakTrendRequest):
         return {"status": "success", "trends": trends}
     except Exception as e:
         logger.error(f"获取薄弱点趋势失败: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 获取学习路径
+@app.get("/get_learning_path/{node_id}")
+def get_learning_path(node_id: str):
+    try:
+        from src.agents.knowledge_graph_agent import KnowledgeGraphAgent
+        agent = KnowledgeGraphAgent()
+        path = agent.get_learning_path(node_id)
+        return {"status": "success", "path": path}
+    except Exception as e:
+        logger.error(f"获取学习路径失败: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 获取后续学习节点
+@app.get("/get_next_learning/{node_id}")
+def get_next_learning(node_id: str):
+    try:
+        from src.agents.knowledge_graph_agent import KnowledgeGraphAgent
+        agent = KnowledgeGraphAgent()
+        next_nodes = agent.get_next_learning(node_id)
+        return {"status": "success", "next_learning": next_nodes}
+    except Exception as e:
+        logger.error(f"获取后续学习节点失败: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 获取薄弱点关联推荐
+class WeakPointRelatedRequest(BaseModel):
+    weak_point_ids: List[str]
+
+@app.post("/get_weak_points_related")
+def get_weak_points_related(request: WeakPointRelatedRequest):
+    try:
+        from src.agents.knowledge_graph_agent import KnowledgeGraphAgent
+        agent = KnowledgeGraphAgent()
+        related = agent.get_weak_points_related(request.weak_point_ids)
+        return {"status": "success", "related_points": related}
+    except Exception as e:
+        logger.error(f"获取薄弱点关联失败: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 # 主入口
