@@ -257,7 +257,8 @@ class ContentExtractorAgent:
                 self.cache_manager.set_process_result(pdf_path, result_data)
                 # 设置处理状态为已完成
                 self.cache_manager.set_process_status(pdf_path, 'completed', current_step=4, total_steps=4)
-                
+                self.cache_manager.flush()
+
                 return result_data
 
         self._update_progress(f"保存知识点: {filename}")
@@ -285,7 +286,8 @@ class ContentExtractorAgent:
             self.cache_manager.set_process_result(pdf_path, result_data)
             # 设置处理状态为已完成
             self.cache_manager.set_process_status(pdf_path, 'completed', current_step=4, total_steps=4)
-            
+            self.cache_manager.flush()
+
             self._update_progress(f"处理完成: {filename}")
             logger.info(f"[ContentExtractor] PDF processed successfully: {filename} | text={len(extracted_data['text'])} chars, images={len(extracted_data['images_description'])}")
             return result_data
@@ -293,6 +295,7 @@ class ContentExtractorAgent:
             logger.error(f"[ContentExtractor] Failed to save results for {filename}: {e}")
             self._update_progress(f"保存失败: {e}")
             self.cache_manager.set_process_status(pdf_path, 'failed', error_message=f"保存失败: {e}")
+            self.cache_manager.flush()
             return {"status": "error", "message": f"保存失败: {e}", "extracted_data": extracted_data}
 
     def process_all_pdfs(self):
