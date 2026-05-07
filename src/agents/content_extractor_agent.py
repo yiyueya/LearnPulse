@@ -372,9 +372,9 @@ class ContentExtractorAgent:
             self._check_cancel()
             pdf_path = file_info.get("path")
             subject = file_info.get("subject")
-            grade = file_info.get("grade")
+            grade = file_info.get("grade") or "一年级"  # 默认一年级
 
-            if not pdf_path or not subject or not grade:
+            if not pdf_path or not subject:
                 self._update_progress(f"文件信息不完整，跳过")
                 continue
 
