@@ -1,0 +1,23 @@
+# Data files (runtime generated)
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
