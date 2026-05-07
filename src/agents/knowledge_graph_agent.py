@@ -133,6 +133,14 @@ class KnowledgeGraphAgent:
                         if i != j:
                             self.kg.add_relation(source_id, target_id, '关联', 0.5)
 
+    def build_knowledge_maps(self, subjects):
+        """构建指定多个学科的知识地图"""
+        results = {}
+        for subject in subjects:
+            result = self.build_knowledge_map(subject)
+            results[subject] = result
+        return results
+
     def build_knowledge_map(self, subject):
         """构建指定学科的知识地图"""
         # 清空该学科现有数据
