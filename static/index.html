@@ -482,13 +482,14 @@
 
         <div class="card">
             <h2>2. 选择文件并处理</h2>
-            <p>选择要处理的PDF文件（可多选），然后点击处理按钮</p>
+            <p>选择要处理的PDF文件（可多选），支持断点续传</p>
             <div class="form-group">
                 <button class="btn" onclick="loadUploadedFiles()">刷新文件列表</button>
+                <button class="btn" onclick="selectPendingFiles()">选择待处理</button>
                 <button class="btn" onclick="selectAllFiles()">全选</button>
                 <button class="btn" onclick="deselectAllFiles()">取消全选</button>
             </div>
-            <div id="uploadedFilesList" style="max-height:200px;overflow-y:auto;border:1px solid #ddd;padding:10px;margin:10px 0;border-radius:8px;">
+            <div id="uploadedFilesList" style="max-height:250px;overflow-y:auto;border:1px solid #ddd;padding:10px;margin:10px 0;border-radius:8px;">
                 <p style="color:#999;">点击"刷新文件列表"加载已上传的文件</p>
             </div>
             <div class="form-group">
@@ -520,13 +521,6 @@
                 <select id="subject">
                     <option value="数学">数学</option>
                     <option value="语文">语文</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="grade">选择年级：</label>
-                <select id="grade">
-                    <option value="一年级">一年级</option>
-                    <option value="二年级">二年级</option>
                 </select>
             </div>
             <button class="btn" onclick="generateTest()">生成测试</button>
@@ -669,11 +663,25 @@
                     pendingFiles = data.files;
                     let html = '';
                     data.files.forEach((file, index) => {
+                        // Status colors: pending=gray, processing=blue, completed=green, failed=red
+                        let statusColor = '#999';
+                        let statusBg = '#f5f5f5';
+                        if (file.status === 'completed') {
+                            statusColor = '#22c55e';
+                            statusBg = '#f0fdf4';
+                        } else if (file.status === 'processing') {
+                            statusColor = '#3b82f6';
+                            statusBg = '#eff6ff';
+                        } else if (file.status === 'failed') {
+                            statusColor = '#ef4444';
+                            statusBg = '#fef2f2';
+                        }
+
                         html += `
-                            <label style="display:block;padding:5px;cursor:pointer;">
+                            <label style="display:block;padding:8px;cursor:pointer;background:${statusBg};border-radius:6px;margin-bottom:6px;">
                                 <input type="checkbox" class="file-checkbox" data-index="${index}" onchange="updateProcessButton()">
-                                <span style="margin-left:8px;">${file.filename}</span>
-                                <span style="color:#666;font-size:12px;"> [${file.subject}]</span>
+                                <span style="margin-left:8px;font-weight:500;">${file.filename}</span>
+                                <span style="margin-left:8px;font-size:12px;color:${statusColor};">[${file.status_text}]</span>
                             </label>
                         `;
                     });
@@ -688,6 +696,19 @@
                 listDiv.innerHTML = '<p style="color:red;">加载失败</p>';
                 console.error('加载文件列表失败:', e);
             }
+        }
+
+        // 选择待处理的文件（状态为pending或failed的）
+        function selectPendingFiles() {
+            document.querySelectorAll('.file-checkbox').forEach(cb => {
+                const file = pendingFiles[parseInt(cb.dataset.index)];
+                if (file && (file.status === 'pending' || file.status === 'failed')) {
+                    cb.checked = true;
+                } else {
+                    cb.checked = false;
+                }
+            });
+            updateProcessButton();
         }
 
         // 全选
@@ -912,11 +933,11 @@
             const loading = document.getElementById('testLoading');
             const result = document.getElementById('testResult');
             const subject = document.getElementById('subject').value;
-            const grade = document.getElementById('grade').value;
-            
+            const grade = "一年级";  // 简化：固定为一年级
+
             loading.classList.add('show');
             result.classList.remove('show');
-            
+
             try {
                 const response = await fetch(`${API_BASE}/generate_test_pdf`, {
                     method: 'POST',

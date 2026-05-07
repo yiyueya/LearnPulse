@@ -253,21 +253,46 @@ def get_pending_files():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 获取已上传的PDF文件列表
+# 获取已上传的PDF文件列表（包含处理状态）
 @app.get("/get_uploaded_files")
 def get_uploaded_files():
-    """获取 data/数学/ 和 data/语文/ 目录下的所有PDF文件"""
+    """获取 data/数学/ 和 data/语文/ 目录下的所有PDF文件及其处理状态"""
     try:
+        from src.utils.cache_manager import CacheManager
+        cache_manager = CacheManager()
+        all_statuses = cache_manager.get_all_process_statuses()
+
         files = []
         for subject in ["数学", "语文"]:
             subject_dir = Path("data") / subject
             if subject_dir.exists():
                 for f in subject_dir.glob("*.pdf"):
+                    file_path = str(f)
+                    status_info = all_statuses.get(file_path, {})
+                    status = status_info.get('status', 'pending') if status_info else 'pending'
+
+                    # 计算处理步骤文字
+                    step_text = ""
+                    if status == 'completed':
+                        step_text = "已完成"
+                    elif status == 'processing':
+                        current_step = status_info.get('current_step', 0)
+                        total_steps = status_info.get('total_steps', 4)
+                        step_names = {1: "提取文本", 2: "理解图片", 3: "提取知识点", 4: "保存结果"}
+                        step_text = f"处理中 ({step_names.get(current_step, '未知')})"
+                    elif status == 'failed':
+                        step_text = f"失败: {status_info.get('error_message', '未知错误')}"
+                    else:
+                        step_text = "待处理"
+
                     files.append({
-                        "path": str(f),
+                        "path": file_path,
                         "filename": f.name,
                         "subject": subject,
-                        "grade": "一年级" if "一年级" in f.name else "二年级"
+                        "status": status,
+                        "status_text": step_text,
+                        "current_step": status_info.get('current_step') if status_info else None,
+                        "total_steps": status_info.get('total_steps') if status_info else 4
                     })
         return {"status": "success", "files": files}
     except Exception as e:
@@ -315,25 +340,26 @@ def get_file_status(file_path: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 获取所有文件处理状态
-@app.get("/get_all_file_status")
-def get_all_file_status():
-    try:
-        from src.utils.cache_manager import CacheManager
-        cache_manager = CacheManager()
-        all_status = cache_manager.process_status
-        return {"status": "success", "file_statuses": all_status}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# 清除文件处理状态
+# 清除文件处理状态（可重新处理）
 @app.delete("/clear_file_status/{file_path:path}")
 def clear_file_status(file_path: str):
     try:
         from src.utils.cache_manager import CacheManager
         cache_manager = CacheManager()
         cache_manager.clear_process_status(file_path)
-        return {"status": "success", "message": "文件处理状态已清除"}
+        cache_manager.clear_process_cache(file_path)
+        return {"status": "success", "message": "文件处理状态已清除，可以重新处理"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 获取所有文件处理状态
+@app.get("/get_all_file_status")
+def get_all_file_status():
+    try:
+        from src.utils.cache_manager import CacheManager
+        cache_manager = CacheManager()
+        all_status = cache_manager.get_all_process_statuses()
+        return {"status": "success", "file_statuses": all_status}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

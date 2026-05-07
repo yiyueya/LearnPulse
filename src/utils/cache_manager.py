@@ -176,6 +176,16 @@ class CacheManager:
             self._process_dirty = True
             self._evict_lru(self.process_cache, MAX_CACHE_SIZE_MB * 1024 * 1024)
 
+    def set_process_cache_and_flush(self, file_path, cache_data):
+        """立即保存处理缓存到磁盘（支持断点续传）"""
+        with self._lock:
+            self.process_cache[file_path] = {
+                'data': cache_data,
+                'timestamp': time.time()
+            }
+            self._process_dirty = True
+        self._flush()
+
     def clear_process_cache(self, file_path):
         with self._lock:
             if file_path in self.process_cache:
@@ -231,6 +241,11 @@ class CacheManager:
     def get_process_status(self, file_path):
         with self._lock:
             return self.process_status.get(file_path)
+
+    def get_all_process_statuses(self):
+        """获取所有文件的处理状态"""
+        with self._lock:
+            return dict(self.process_status)
 
     def set_process_result(self, file_path, result_data):
         with self._lock:

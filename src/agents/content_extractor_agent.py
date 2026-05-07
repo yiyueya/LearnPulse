@@ -132,7 +132,7 @@ class ContentExtractorAgent:
 
                     # Progress update for each image processed
                     self._update_progress(
-                        f"处理第 {image_count} 张图片 (AI已处理{ai_processed_count}张)...",
+                        f"理解图片 {ai_processed_count}/{image_count} (共提取{len(images_description)}张)",
                         self._calculate_step_progress(2, 4, 10 + min((image_count % 50) * 0.5, 30))
                     )
 
@@ -158,9 +158,9 @@ class ContentExtractorAgent:
                                 "value_class": img_data.get("value_class", "A")
                             })
 
-                            # Save progress immediately to disk to avoid memory buildup
+                            # Save progress immediately to disk (support resumable processing)
                             extracted_data["images_description"] = images_description
-                            self.cache_manager.set_process_cache(pdf_path, {"extracted_data": extracted_data})
+                            self.cache_manager.set_process_cache_and_flush(pdf_path, {"extracted_data": extracted_data})
 
                     finally:
                         # Release temp file memory immediately
@@ -177,7 +177,7 @@ class ContentExtractorAgent:
                 # Keep whatever images were processed so far
 
             extracted_data["images_description"] = images_description
-            self.cache_manager.set_process_cache(pdf_path, {"extracted_data": extracted_data})
+            self.cache_manager.set_process_cache_and_flush(pdf_path, {"extracted_data": extracted_data})
 
         # 更新处理状态
         self.cache_manager.set_process_status(pdf_path, 'processing', current_step=3, total_steps=4)
