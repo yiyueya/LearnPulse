@@ -57,7 +57,7 @@ class ContentExtractorAgent:
         step_progress = step_weight * sub_progress / 100
         return min(int(base_progress + step_progress), 99)
     
-    def process_pdf(self, pdf_path, subject, grade):
+    def process_pdf(self, pdf_path, subject):
         """处理PDF文档，提取知识点（包括图片内容）"""
         filename = Path(pdf_path).name
         logger.debug(f"[ContentExtractor] Starting PDF processing: {filename}")
@@ -72,7 +72,7 @@ class ContentExtractorAgent:
 
         self._check_cancel()
         self.cache_manager.set_process_status(pdf_path, 'processing', current_step=1, total_steps=4)
-        self._update_progress(f"开始处理 {subject} {grade}: {filename}", self._calculate_step_progress(1, 4, 0))
+        self._update_progress(f"开始处理 {subject}: {filename}", self._calculate_step_progress(1, 4, 0))
 
         process_cache = self.cache_manager.get_process_cache(pdf_path)
         extracted_data = process_cache.get("extracted_data", {
@@ -236,7 +236,7 @@ class ContentExtractorAgent:
             except json.JSONDecodeError:
                 self._update_progress(f"处理完成 (非JSON): {filename}")
                 json_filename = Path(pdf_path).name.replace(".pdf", ".json")
-                filepath = self.json_dir / f"{subject}_{grade}_{json_filename}"
+                filepath = self.json_dir / f"{subject}_{json_filename}"
                 with open(filepath, 'w', encoding='utf-8') as f:
                     f.write(knowledge_json)
                 self.file_status_manager.update_file_status(pdf_path)
@@ -262,7 +262,7 @@ class ContentExtractorAgent:
 
         self._update_progress(f"保存知识点: {filename}")
         json_filename = Path(pdf_path).name.replace(".pdf", ".json")
-        filepath = self.json_dir / f"{subject}_{grade}_{json_filename}"
+        filepath = self.json_dir / f"{subject}_{json_filename}"
 
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
@@ -321,7 +321,6 @@ class ContentExtractorAgent:
             self._check_cancel()
             filename = Path(pdf_file).name
             subject = "数学" if "数学" in pdf_file else "语文"
-            grade = "一年级" if "一年级" in filename else "二年级"
 
             # 检查文件是否已完成处理
             if self.cache_manager.is_file_completed(pdf_file):
@@ -337,7 +336,7 @@ class ContentExtractorAgent:
                     self._update_progress(f"已处理 {processed_files}/{total_files} 个文件 (跳过 {skipped_files} 个已完成文件)", progress)
                     continue
 
-            result = self.process_pdf(pdf_file, subject, grade)
+            result = self.process_pdf(pdf_file, subject)
             self._check_cancel()
             if subject not in results:
                 results[subject] = {}
@@ -372,7 +371,7 @@ class ContentExtractorAgent:
             self._check_cancel()
             pdf_path = file_info.get("path")
             subject = file_info.get("subject")
-            grade = file_info.get("grade") or "一年级"  # 默认一年级
+            filename = Path(pdf_path).name if pdf_path else "未知"
 
             if not pdf_path or not subject:
                 self._update_progress(f"文件信息不完整，跳过")
@@ -393,7 +392,7 @@ class ContentExtractorAgent:
                     self._update_progress(f"已处理 {processed_files}/{total_files} 个文件 (跳过 {skipped_files} 个已完成文件)", progress)
                     continue
 
-            result = self.process_pdf(pdf_path, subject, grade)
+            result = self.process_pdf(pdf_path, subject)
             self._check_cancel()
             if subject not in results:
                 results[subject] = {}
