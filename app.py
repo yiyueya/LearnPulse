@@ -253,24 +253,52 @@ def get_pending_files():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# 获取已上传的PDF文件列表
+@app.get("/get_uploaded_files")
+def get_uploaded_files():
+    """获取 data/数学/ 和 data/语文/ 目录下的所有PDF文件"""
+    try:
+        files = []
+        for subject in ["数学", "语文"]:
+            subject_dir = Path("data") / subject
+            if subject_dir.exists():
+                for f in subject_dir.glob("*.pdf"):
+                    files.append({
+                        "path": str(f),
+                        "filename": f.name,
+                        "subject": subject,
+                        "grade": "一年级" if "一年级" in f.name else "二年级"
+                    })
+        return {"status": "success", "files": files}
+    except Exception as e:
+        logger.error(f"获取上传文件列表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # 上传PDF文件
 @app.post("/upload_pdf")
 async def upload_pdf(file: UploadFile = File(...)):
     try:
-        upload_dir = Path("data/pdfs")
+        # 根据文件名自动识别学科和年级
+        filename = file.filename
+        subject = "数学" if "数学" in filename else "语文"
+        grade = "一年级" if "一年级" in filename else "二年级"
+
+        # 保存到对应学科目录
+        upload_dir = Path("data") / subject
         upload_dir.mkdir(parents=True, exist_ok=True)
 
-        # 保存文件
-        file_path = upload_dir / file.filename
+        file_path = upload_dir / filename
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        logger.info(f"上传PDF文件: {file.filename}")
+        logger.info(f"上传PDF文件: {filename} -> {subject}/{grade}")
 
         return {
             "status": "success",
-            "message": f"文件 {file.filename} 上传成功",
-            "path": str(file_path)
+            "message": f"文件 {filename} 上传成功",
+            "path": str(file_path),
+            "subject": subject,
+            "grade": grade
         }
     except Exception as e:
         logger.error(f"上传PDF失败: {str(e)}")

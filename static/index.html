@@ -471,16 +471,33 @@
         
         <div class="card">
             <h2>1. 上传PDF文档</h2>
-            <p>上传PDF教材，系统自动识别学科并构建知识地图</p>
+            <p>上传PDF教材到服务器（自动按学科分类）</p>
             <div class="form-group">
                 <input type="file" id="pdfUpload" accept=".pdf" multiple onchange="handlePdfUpload(this.files)" style="display:none;">
                 <button class="btn" onclick="document.getElementById('pdfUpload').click()">选择PDF文件上传</button>
                 <span id="uploadFileNames" style="margin-left:10px;color:#666;"></span>
             </div>
+            <div id="uploadResult" style="margin-top:10px;"></div>
         </div>
-        
+
         <div class="card">
-            <h2>2. 处理进度</h2>
+            <h2>2. 选择文件并处理</h2>
+            <p>选择要处理的PDF文件（可多选），然后点击处理按钮</p>
+            <div class="form-group">
+                <button class="btn" onclick="loadUploadedFiles()">刷新文件列表</button>
+                <button class="btn" onclick="selectAllFiles()">全选</button>
+                <button class="btn" onclick="deselectAllFiles()">取消全选</button>
+            </div>
+            <div id="uploadedFilesList" style="max-height:200px;overflow-y:auto;border:1px solid #ddd;padding:10px;margin:10px 0;border-radius:8px;">
+                <p style="color:#999;">点击"刷新文件列表"加载已上传的文件</p>
+            </div>
+            <div class="form-group">
+                <button class="btn" id="processSelectedBtn" onclick="processSelectedFiles()" disabled>处理选定文件</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>3. 处理进度</h2>
             <div class="loading" id="pdfLoading">
                 <div class="spinner"></div>
                 <p>正在处理PDF文档，请稍候...</p>
@@ -495,9 +512,9 @@
             </div>
             <div class="result" id="pdfResult"></div>
         </div>
-        
+
         <div class="card">
-            <h2>3. 生成诊断测试</h2>
+            <h2>4. 生成诊断测试</h2>
             <div class="form-group">
                 <label for="subject">选择学科：</label>
                 <select id="subject">
@@ -521,7 +538,7 @@
         </div>
         
         <div class="card">
-            <h2>4. 评估测试</h2>
+            <h2>5. 评估测试</h2>
             <p>输入测试题目和学生答案进行评估</p>
             <div class="form-group">
                 <label for="questions">测试题目（JSON格式）：</label>
@@ -540,7 +557,7 @@
         </div>
         
         <div class="card">
-            <h2>5. 知识地图</h2>
+            <h2>6. 知识地图</h2>
             <p>查看知识点之间的关联关系</p>
             <div class="map-controls">
                 <select id="mapSubject">
@@ -561,7 +578,8 @@
         const API_BASE = 'http://localhost:8000';
         const PROCESSING_STATUS_KEY = 'processing_status';
         let eventSource = null;
-        let uploadedFiles = [];
+        let uploadedFiles = [];  // 待上传的文件列表
+        let pendingFiles = [];   // 已上传待处理的文件列表
 
         function showStatus(message, isError = false) {
             const status = document.getElementById('status');
@@ -588,28 +606,21 @@
             localStorage.removeItem(PROCESSING_STATUS_KEY);
         }
 
-        function handlePdfUpload(files) {
+        // 上传文件（不上传自动处理）
+        async function handlePdfUpload(files) {
             if (!files || files.length === 0) return;
 
             const fileNames = Array.from(files).map(f => f.name).join(', ');
             document.getElementById('uploadFileNames').textContent = `已选择 ${files.length} 个文件`;
 
             uploadedFiles = Array.from(files);
-            showStatus(`已选择 ${files.length} 个PDF文件，正在上传...`);
+            showStatus(`正在上传 ${files.length} 个文件...`);
 
-            // 直接开始上传
-            processSelectedFiles();
-        }
+            const uploadResultDiv = document.getElementById('uploadResult');
+            let successCount = 0;
+            let failCount = 0;
 
-        async function processSelectedFiles() {
-            // 上传文件并处理
-            if (!uploadedFiles || uploadedFiles.length === 0) {
-                showStatus('请先选择PDF文件', true);
-                return;
-            }
-
-            showStatus(`正在上传 ${uploadedFiles.length} 个文件...`);
-            const uploadPromises = uploadedFiles.map(async (file) => {
+            for (const file of uploadedFiles) {
                 const formData = new FormData();
                 formData.append('file', file);
                 try {
@@ -618,35 +629,99 @@
                         body: formData
                     });
                     const result = await response.json();
-                    // 自动识别学科：文件名包含"语文"为语文，否则为数学
-                    const subject = file.name.includes('语文') ? '语文' : '数学';
-                    // 自动识别年级：根据文件名中的"上册/下册"或"一年级/二年级"
-                    let grade = '一年级';
-                    if (file.name.includes('二年级')) grade = '二年级';
-                    else if (file.name.includes('下册')) grade = '一年级'; // 默认为一年级下册
-                    return {
-                        filename: file.name,
-                        subject: subject,
-                        grade: grade,
-                        path: result.path
-                    };
+                    if (result.status === 'success') {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
                 } catch (e) {
                     console.error('上传失败:', e);
-                    return null;
+                    failCount++;
                 }
-            });
+            }
 
-            const uploadedResults = await Promise.all(uploadPromises);
-            const validFiles = uploadedResults.filter(r => r !== null);
-
-            if (validFiles.length > 0) {
-                startProcessing(validFiles);
+            if (successCount > 0) {
+                uploadResultDiv.innerHTML = `<span style="color:green;">成功上传 ${successCount} 个文件${failCount > 0 ? `，失败 ${failCount} 个` : ''}</span>`;
+                showStatus(`上传完成：${successCount} 个文件`);
+                // 成功后自动刷新文件列表
+                loadUploadedFiles();
             } else {
+                uploadResultDiv.innerHTML = `<span style="color:red;">上传失败</span>`;
                 showStatus('文件上传失败', true);
             }
 
             uploadedFiles = [];
             document.getElementById('uploadFileNames').textContent = '';
+        }
+
+        // 加载已上传的文件列表
+        async function loadUploadedFiles() {
+            const listDiv = document.getElementById('uploadedFilesList');
+            const processBtn = document.getElementById('processSelectedBtn');
+
+            listDiv.innerHTML = '<p style="color:#999;">加载中...</p>';
+
+            try {
+                const response = await fetch(`${API_BASE}/get_uploaded_files`);
+                const data = await response.json();
+
+                if (data.files && data.files.length > 0) {
+                    pendingFiles = data.files;
+                    let html = '';
+                    data.files.forEach((file, index) => {
+                        html += `
+                            <label style="display:block;padding:5px;cursor:pointer;">
+                                <input type="checkbox" class="file-checkbox" data-index="${index}" onchange="updateProcessButton()">
+                                <span style="margin-left:8px;">${file.filename}</span>
+                                <span style="color:#666;font-size:12px;"> [${file.subject}]</span>
+                            </label>
+                        `;
+                    });
+                    listDiv.innerHTML = html;
+                    processBtn.disabled = true;
+                } else {
+                    listDiv.innerHTML = '<p style="color:#999;">没有已上传的文件</p>';
+                    pendingFiles = [];
+                    processBtn.disabled = true;
+                }
+            } catch (e) {
+                listDiv.innerHTML = '<p style="color:red;">加载失败</p>';
+                console.error('加载文件列表失败:', e);
+            }
+        }
+
+        // 全选
+        function selectAllFiles() {
+            document.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = true);
+            updateProcessButton();
+        }
+
+        // 取消全选
+        function deselectAllFiles() {
+            document.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = false);
+            updateProcessButton();
+        }
+
+        // 更新处理按钮状态
+        function updateProcessButton() {
+            const checkedBoxes = document.querySelectorAll('.file-checkbox:checked');
+            const processBtn = document.getElementById('processSelectedBtn');
+            processBtn.disabled = checkedBoxes.length === 0;
+            processBtn.textContent = checkedBoxes.length > 0
+                ? `处理选定文件 (${checkedBoxes.length})`
+                : '处理选定文件';
+        }
+
+        // 处理选定的文件
+        async function processSelectedFiles() {
+            const checkedBoxes = document.querySelectorAll('.file-checkbox:checked');
+            if (checkedBoxes.length === 0) {
+                showStatus('请先选择要处理的文件', true);
+                return;
+            }
+
+            const selectedFiles = Array.from(checkedBoxes).map(cb => pendingFiles[parseInt(cb.dataset.index)]);
+            startProcessing(selectedFiles);
         }
 
         async function stopProcessing() {
