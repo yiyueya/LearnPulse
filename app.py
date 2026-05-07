@@ -17,6 +17,10 @@ import os
 
 logger.info("应用启动中...")
 
+# 确保必要的数据目录存在
+for dir_path in [Path("data"), Path("data/json"), Path("data/cache"), Path("data/数学"), Path("data/语文")]:
+    dir_path.mkdir(parents=True, exist_ok=True)
+
 # 创建FastAPI应用
 app = FastAPI(
     title="AI智能学习助手",
