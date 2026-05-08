@@ -2,6 +2,10 @@
 fastapi
 uvicorn
 python-dotenv
+python-multipart  # 文件上传
+
+# 测试
+pytest
 
 # PDF解析
 pdfplumber
@@ -14,12 +18,13 @@ numpy
 # 知识图谱
 networkx
 
-# AI模型集成
-dashscope  # 阿里云百炼SDK
+# AI服务
+# MiniMax API - 通过 requests 调用 (见 config/config.py)
 
 # 工具库
 requests
 beautifulsoup4
+reportlab  # PDF生成
 
 # 前端集成
 fastapi-cors
