@@ -94,7 +94,7 @@ class ContentExtractorAgent:
             extracted_data["text"] = text
             logger.info(f"[ContentExtractor] Text extracted: {len(text)} chars from {filename}")
             self._update_progress(f"提取到 {len(text)} 字符的文本", self._calculate_step_progress(1, 4, 60))
-            self.cache_manager.set_process_cache(pdf_path, {"extracted_data": extracted_data})
+            self.cache_manager.set_process_cache_and_flush(pdf_path, {"extracted_data": extracted_data})
         
         self.cache_manager.set_process_status(pdf_path, 'processing', current_step=2, total_steps=4)
 
