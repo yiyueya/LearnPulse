@@ -10,6 +10,9 @@ pytest
 # PDF解析
 pdfplumber
 PyPDF2
+PyMuPDF  # fitz, 用于PDF文本/图片提取和OCR渲染
+Pillow   # PIL, 用于图片处理和OCR
+pytesseract  # OCR引擎，扫描版PDF文本提取
 
 # 数据处理
 pandas
