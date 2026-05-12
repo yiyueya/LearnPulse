@@ -45,9 +45,44 @@ class PDFParser:
                     page_text = page.extract_text()
                     if page_text:
                         text += page_text + "\n"
+
+            # 如果提取的文本过少，可能是扫描版PDF，尝试OCR
+            if len(text.strip()) < 50:
+                logger.debug(f"[PDFParser] pdfplumber提取文本过少（{len(text)}字符），尝试OCR")
+                text = self._extract_text_ocr(pdf_path)
+
             return text
         except Exception as e:
             logger.error(f"PDF解析错误: {e}")
+            return ""
+
+    def _extract_text_ocr(self, pdf_path):
+        """使用OCR从扫描版PDF中提取文本"""
+        try:
+            import pytesseract
+            from PIL import Image
+            import io
+            doc = fitz.open(pdf_path)
+            text_parts = []
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                # 将页面渲染为图像（2.0 = 200 DPI对于文本OCR足够）
+                mat = fitz.Matrix(2.0, 2.0)
+                pix = page.get_pixmap(matrix=mat, alpha=False)
+                img_bytes = pix.tobytes("png")
+                pil_img = Image.open(io.BytesIO(img_bytes)).convert("L")
+                # 简单二值化：提升文字对比度
+                pil_img = pil_img.point(lambda x: 0 if x < 128 else 255)
+                # PSM 4: 按文本块自动分割（适合扫描版）
+                ocr_text = pytesseract.image_to_string(pil_img, lang="chi_sim", config="--psm 4")
+                if ocr_text.strip():
+                    text_parts.append(ocr_text.strip())
+                pil_img.close()
+            doc.close()
+            logger.debug(f"[PDFParser] OCR完成，提取 {len(text_parts)} 页文本")
+            return "\n".join(text_parts)
+        except Exception as e:
+            logger.debug(f"[PDFParser] OCR提取失败: {e}")
             return ""
     
     def extract_images(self, pdf_path):
